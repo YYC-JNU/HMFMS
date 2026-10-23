@@ -875,8 +875,8 @@ parameters:
 | 0 | `PLACEHOLDER` | 占位模式 | 仅 `--allow-placeholder`；值 0 |
 
 - 同一参数只解析一次，结果写入 `resolved_parameters.csv`。
-- 库文件可以不存在；但若某个参数真的需要回落到库，而库中无该键，则报错。
-  若在 `model.yaml` 中显式配置了 `parameters.library` 而文件不存在，装载期直接报错。
+- 未配置 `parameters.library` 时库为空；需要库的参数只能靠事件覆盖，否则报错。
+- 显式配置 `parameters.library` 但文件不存在，装载期直接报错。
 - 单位换算只使用内置白名单；库中单位与目标量纲不匹配会报错。
 - **BCF 没有随仓库默认值。** 若要用 BCF，必须自己在库中写 `bcf.*` 条目，或在事件行覆盖。
 

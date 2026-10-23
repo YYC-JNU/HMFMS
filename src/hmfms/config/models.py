@@ -14,13 +14,15 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from hmfms.utils.units import to_internal
 
 ONE_DAY = "1D"
+OutputFrequency = Literal["daily", "monthly", "annual"]
+OUTPUT_FREQUENCIES: tuple[OutputFrequency, ...] = ("daily", "monthly", "annual")
 
 
 class _Strict(BaseModel):
@@ -102,26 +104,64 @@ class MagnitudeLimit(_Strict):
         return self
 
 
+class NetCDFSourceConfig(_Strict):
+    """NetCDF 沉降源的接线。
+
+    维度名与变量名**全部来自配置**，适配器不假设 ``time`` / ``lat`` / ``lon``
+    等任何具体命名（ADR 的 X7）。干/湿通量的变量名复用
+    ``DepositionConfig.dry_columns`` / ``wet_columns`` 的“元素 → 变量名”映射。
+    """
+
+    cache: Path
+    time_dim: str = Field(min_length=1)
+    lat_dim: str = Field(min_length=1)
+    lon_dim: str = Field(min_length=1)
+    time_variable: str = Field(min_length=1)
+    latitude_variable: str = Field(min_length=1)
+    longitude_variable: str = Field(min_length=1)
+    # 给出时覆盖时间变量的 units 属性；未给出则读文件属性。
+    time_units: str | None = None
+
+
 class DepositionConfig(_Strict):
     """沉降输入接线。
 
     干、湿沉降的列名按元素显式给出，不做字符串模板猜测——不同机构的
     NetCDF/CSV 命名差异太大，模板反而会制造静默错配。
+
+    ``format`` 决定来源：``csv``（一等公民）或 ``netcdf``（适配器先提取到
+    ``netcdf.cache``，主循环仍只读 CSV）。
     """
 
     file: Path
+    format: Literal["csv", "netcdf"] = "csv"
     units: str
     date_column: str = "date"
     dry_columns: dict[str, str] = Field(min_length=1)
     wet_columns: dict[str, str] = Field(min_length=1)
     gap_policy: Literal["error", "interpolate"] = "error"
     magnitude_check: dict[str, MagnitudeLimit] | None = None
+    netcdf: NetCDFSourceConfig | None = None
 
     @field_validator("units")
     @classmethod
     def _check_units(cls, value: str) -> str:
         to_internal(1.0, value, "flux")
         return value
+
+    @model_validator(mode="after")
+    def _netcdf_block_matches_format(self) -> DepositionConfig:
+        if self.format == "netcdf" and self.netcdf is None:
+            raise ValueError(
+                "format: netcdf 时必须提供 inputs.deposition.netcdf 块，"
+                "写明 cache、三个维度和三个坐标/时间变量名。"
+            )
+        if self.format == "csv" and self.netcdf is not None:
+            raise ValueError(
+                "inputs.deposition.netcdf 块只在 format: netcdf 时有效；"
+                "CSV 路径请删除该块，避免两套接线同时存在。"
+            )
+        return self
 
     @model_validator(mode="after")
     def _same_elements(self) -> DepositionConfig:
@@ -152,18 +192,20 @@ class InputsConfig(_Strict):
 
 class OutputConfig(_Strict):
     directory: Path
-    interval: tuple[str, ...] = ("daily",)
+    interval: tuple[OutputFrequency, ...] = ("daily",)
 
     @field_validator("interval")
     @classmethod
-    def _known_intervals(cls, value: tuple[str, ...]) -> tuple[str, ...]:
-        allowed = {"daily", "monthly", "annual"}
+    def _known_intervals(
+        cls, value: tuple[str, ...]
+    ) -> tuple[OutputFrequency, ...]:
+        allowed = set(OUTPUT_FREQUENCIES)
         unknown = sorted(set(value) - allowed)
         if unknown:
             raise ValueError(f"未知的输出频率 {unknown}；允许的值：{sorted(allowed)}")
         if not value:
             raise ValueError("输出频率不能为空")
-        return tuple(dict.fromkeys(value))
+        return cast(tuple[OutputFrequency, ...], tuple(dict.fromkeys(value)))
 
 
 class FertilizerUnits(_Strict):
@@ -311,6 +353,7 @@ class ModelConfig(_Strict):
     version: str = Field(min_length=1)
     time: TimeConfig
     elements: tuple[str, ...] = Field(min_length=1)
+    element_configs: dict[str, Path] | None = None
     field: Path
     inputs: InputsConfig
     output: OutputConfig
@@ -328,6 +371,19 @@ class ModelConfig(_Strict):
         if duplicates:
             raise ValueError(f"元素列表中存在重复项：{duplicates}")
         return cleaned
+
+    @model_validator(mode="after")
+    def _element_configs_match_elements(self) -> ModelConfig:
+        """元素配置只能挂在已声明的元素上，避免拼写错误静默失效。"""
+        if not self.element_configs:
+            return self
+        unknown = sorted(set(self.element_configs) - set(self.elements))
+        if unknown:
+            raise ValueError(
+                f"element_configs 含未在 elements 中声明的元素 {unknown}；"
+                f"已声明：{list(self.elements)}"
+            )
+        return self
 
     @model_validator(mode="after")
     def _deposition_matches_elements(self) -> ModelConfig:

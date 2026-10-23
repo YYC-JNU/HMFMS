@@ -1,0 +1,17 @@
+element: Cd
+layer_id: 1
+simulation:
+  file: output/daily.csv
+  date_column: date
+observations:
+  file: observations.csv
+  date_column: date
+  value_column: cd_mg_kg
+  units: mg/kg
+match:
+  rule: nearest
+  tolerance_days: 30
+metrics:
+  trend_min_points: 3
+output:
+  directory: validation

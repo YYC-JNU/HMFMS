@@ -20,12 +20,17 @@ from hmfms.core.errors import ParameterSourceError
 from hmfms.parameters.library import ParameterEntry
 from hmfms.utils.units import to_internal
 
+TIER_PLACEHOLDER = 0
 TIER_EVENT = 1
 TIER_LOCAL = 2
 TIER_SELECTED = 3
 TIER_LITERATURE = 4
 
+TIER_CONFIG = TIER_LOCAL
+TIER_LABEL_CONFIG = "local-config"
+
 TIER_LABELS: Mapping[int, str] = {
+    TIER_PLACEHOLDER: "PLACEHOLDER",
     TIER_EVENT: "event-override",
     TIER_LOCAL: "local-measured",
     TIER_SELECTED: "library-selected",
@@ -74,13 +79,14 @@ class ParameterRequest:
 @dataclass(frozen=True)
 class Provenance:
     key: str
-    value: float
+    value: float | None
     internal_unit: str
     dimension: str
     tier: int
     tier_label: str
     source: str
     confidence: str
+    note: str = ""
 
 
 @dataclass
@@ -89,10 +95,19 @@ class ParameterResolver:
 
     library: Mapping[str, ParameterEntry]
     document: str = "docs/parameters.md"
+    allow_placeholder: bool = False
     _records: list[Provenance] = field(default_factory=list)
+    _placeholder_keys: set[str] = field(default_factory=set)
 
     def resolve(self, request: ParameterRequest) -> float:
         value, tier, source, confidence = self._pick(request)
+        note = ""
+        if tier == TIER_PLACEHOLDER:
+            self._placeholder_keys.add(request.key)
+            note = (
+                f"{request.doc_section}；占位值 0，仅供结构演示，"
+                "不得用于正式结论"
+            )
         self._records.append(
             Provenance(
                 key=request.key,
@@ -103,6 +118,7 @@ class ParameterResolver:
                 tier_label=TIER_LABELS[tier],
                 source=source,
                 confidence=confidence,
+                note=note,
             )
         )
         return value
@@ -110,7 +126,50 @@ class ParameterResolver:
     def records(self) -> tuple[Provenance, ...]:
         return tuple(self._records)
 
+    @property
+    def has_placeholders(self) -> bool:
+        return bool(self._placeholder_keys)
+
+    def placeholder_keys(self) -> tuple[str, ...]:
+        return tuple(sorted(self._placeholder_keys))
+
+    def record_choice(
+        self,
+        *,
+        key: str,
+        choice: str,
+        source: str,
+        note: str = "",
+    ) -> None:
+        """记录一个**分类选择**（如吸收模式）。
+
+        它没有数值，而 ``value`` 列保持数值语义——因此留空，选择本身写进
+        ``note``。把模式编码成 0/1 会让溯源表看起来有数、实际不可读。
+        """
+        self._records.append(
+            Provenance(
+                key=key,
+                value=None,
+                internal_unit="1",
+                dimension="choice",
+                tier=TIER_CONFIG,
+                tier_label=TIER_LABEL_CONFIG,
+                source=source,
+                confidence="high",
+                note=note or choice,
+            )
+        )
+
     # ------------------------------------------------------------ 内部
+
+    def _placeholder(self) -> tuple[float, int, str, str]:
+        """占位值只用于结构演示：0、tier 0、低置信度。"""
+        return (
+            0.0,
+            TIER_PLACEHOLDER,
+            "占位（--allow-placeholder）",
+            "low",
+        )
 
     def _pick(
         self, request: ParameterRequest
@@ -134,6 +193,8 @@ class ParameterResolver:
         if request.selected is not None:
             entry = self.library.get(request.selected)
             if entry is None:
+                if self.allow_placeholder:
+                    return self._placeholder()
                 raise ParameterSourceError(
                     key=request.selected,
                     context=f"{request.context}（用户点名使用该库条目）",
@@ -159,6 +220,9 @@ class ParameterResolver:
                 entry.source,
                 entry.confidence,
             )
+
+        if self.allow_placeholder:
+            return self._placeholder()
 
         raise ParameterSourceError(
             key=request.key,

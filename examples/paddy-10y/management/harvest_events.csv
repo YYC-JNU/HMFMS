@@ -1,0 +1,11 @@
+event_id,date,crop_id,organ,yield,removal_fraction,Cd_mg_kg_override,Pb_mg_kg_override
+H2015,2015-10-05,rice,grain,6700,1.0,,
+H2016,2016-10-05,rice,grain,6700,1.0,,
+H2017,2017-10-05,rice,grain,6700,1.0,,
+H2018,2018-10-05,rice,grain,6700,1.0,,
+H2019,2019-10-05,rice,grain,6700,1.0,,
+H2020,2020-10-05,rice,grain,6700,1.0,,
+H2021,2021-10-05,rice,grain,6700,1.0,,
+H2022,2022-10-05,rice,grain,6700,1.0,,
+H2023,2023-10-05,rice,grain,6700,1.0,,
+H2024,2024-10-05,rice,grain,6700,1.0,,

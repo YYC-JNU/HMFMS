@@ -12,6 +12,7 @@ dist/
 
 # ---- 运行输出（可由输入重跑得到）----
 examples/**/output/
+examples/**/validation/
 data/output/
 *.log
 

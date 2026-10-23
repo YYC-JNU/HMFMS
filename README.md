@@ -1,16 +1,18 @@
 # HMFMS — Heavy Metal Flux Model in Soil
 
-> ## ⚠️ 状态：0.1.0-alpha — 半成品，欢迎指正
+> ## ⚠️ 状态：0.2.0-alpha — v1 范围已实现，仍是研究原型
 >
-> 这是一个**开发中的早期版本**，发布出来是为了尽早获得反馈，而不是提供一个可以直接用于
-> 科研结论的成品。请在使用前读完这段。
+> v1 的 13 项开发任务已全部完成，251 个测试通过。发布出来是为了尽早获得反馈，
+> 而不是提供一个可以直接用于科研结论的成品。请在使用前读完这段。
 >
-> **已经能做的**：从配置与输入数据出发，逐日推演单块田 0–20 cm 耕层土壤 Cd / Pb 的总量，
-> 输出分过程通量、累积收支、质量闭合误差与参数溯源。核心闭环完整，176 个测试通过。
+> **已经能做的**：从配置与输入数据出发，逐日推演单块田 0–20 cm 耕层土壤 Cd / Pb 的总量；
+> 输出日/月/年三张频率表、分过程通量、累积收支、质量闭合误差与参数溯源；
+> 作物吸收可用固定浓度或 BCF；沉降可读 CSV 或 NetCDF；另带一个独立的观测对比命令
+> 与一个十年稻田演示场景。
 >
 > **还不能做的**：淋溶、径流、侵蚀、风蚀、挥发、水分平衡尚未实现（当前返回零通量）。
 > 因此模型给出的是土壤重金属累积的**上限**，不是预测值——尤其对 Pb，
-> 其主要输出途径恰好是径流，关闭后会被**显著高估**。
+> 其主要输出途径恰好是径流，关闭后会被**显著高估**。运行日志会按元素分别警告。
 >
 > **还会变的**：配置字段、输出列名、内部 API 都可能在不通知的情况下调整。
 > 如果你要用它，建议固定到某个 tag。
@@ -42,18 +44,27 @@ pip install -e ".[dev]"
 
 ## 快速开始
 
+十年稻田演示（2015–2024，3653 天，含观测对比）：
+
+```bash
+python -m hmfms demo
+python -m hmfms demo --no-validate   # 只跑模型
+```
+
+最小算例：
+
 ```bash
 python -m hmfms run examples/minimal/model.yaml
 ```
 
-输出两个文件到 `examples/minimal/output/`：
+观测对比（只读已有模拟输出，不重跑模型）：
 
-| 文件 | 内容 |
-|---|---|
-| `daily.csv` | 逐日土壤含量、储量、各过程通量、累积收支、闭合误差 |
-| `resolved_parameters.csv` | 每个参数的取值、单位、命中层级、来源、置信度 |
+```bash
+python -m hmfms validate examples/paddy-10y/validation.yaml
+```
 
 `examples/minimal` 是一个 10 天的合成算例，**数值为演示量级，不代表任何真实田块**。
+`examples/paddy-10y` 是按文献区间合成的十年稻田场景，参数来源与假设见该目录 README。
 
 ## 模型描述
 
@@ -137,6 +148,9 @@ F_lumped       = k_loss · M                                      (12)
 | 秸秆外运 | 输出 | 事件日 |
 | 综合损失（经验，默认关闭） | 输出 | 每日 |
 
+作物吸收在同一张表里支持两种模式：固定器官浓度（`concentration`）或富集系数
+（`bcf`）。模式按元素配置，同一元素只能取一种；详见下文“更多能力”。
+
 ### 预留但尚未实现的过程
 
 淋溶、径流、侵蚀、风蚀、挥发、水分平衡在首版**返回零通量**，但输出列始终存在。
@@ -150,18 +164,95 @@ F_lumped       = k_loss · M                                      (12)
 
 模型在运行日志中会按元素分别给出警告。
 
+## 更多能力（0.2）
+
+### 作物吸收：固定浓度或 BCF
+
+默认 `concentration`：器官含量来自参数库或事件覆盖。要让某个元素的器官含量随土壤含量变化，
+为它指向一个元素配置：
+
+```yaml
+element_configs:
+  Cd: elements/Cd.yaml
+```
+
+```yaml
+# elements/Cd.yaml
+element: Cd
+crop_uptake:
+  mode: bcf          # concentration | bcf
+  basis: total       # v1 只支持 total
+```
+
+BCF 值取自参数库 `bcf.<作物>.<器官>.<元素>`，或事件行 `<元素>_bcf_override`。
+同一元素写两种模式、或使用 `basis: available`，装载期直接报错。
+v1 的 BCF 只作用于收获表；秸秆表仍按固定浓度计算，并在运行日志中提示。
+
+### 输出频率、配置指纹与占位模式
+
+`output.interval` 可选 `daily` / `monthly` / `annual` 的任意组合，产物为
+`daily.csv` / `monthly.csv` / `annual.csv`。三张表共用同一份列契约：
+
+- 通量列（`_mg_m2_d`）取**期内日均**；
+- 状态、累积与闭合列取**期末值**。
+
+每张表首行为：
+
+```
+# schema_version=4 fingerprint=<16hex> frequency=daily
+```
+
+指纹按**有效输入**计算：模型配置（去掉沉降取数接线）+ 加载后的沉降序列 + 其余输入文件。
+同一配置换机器、换目录、换行风格都不变；任一影响结果的数值改动即变。
+`--allow-placeholder` 可用占位值 0 做结构演示，此时所有数值列加 `_PLACEHOLDER` 后缀，
+日志逐条列出占位参数——这类结果不能用于任何结论。
+
+### 沉降：CSV 或 NetCDF
+
+CSV 是一等公民。NetCDF 由适配器按田块经纬度最近邻提取后缓存为 CSV：
+
+```yaml
+inputs:
+  deposition:
+    file: grid.nc
+    format: netcdf
+    units: mg/m2/day
+    dry_columns: {Cd: dry_dep_Cd}     # 元素 → 变量名
+    wet_columns: {Cd: wet_dep_Cd}
+    netcdf:
+      cache: extracted.csv
+      time_dim: time
+      lat_dim: latitude
+      lon_dim: longitude
+      time_variable: time
+      latitude_variable: latitude
+      longitude_variable: longitude
+```
+
+维度名、变量名、缓存路径全部来自配置；坐标越界、变量/维度缺失都会报错并列出实际值。
+提取后的缓存 CSV 可以直接改 `format: csv` 复用。
+
+### 观测对比（独立命令）
+
+`hmfms validate validation.yaml` 只读已有模拟 CSV 与观测表，不重跑模型，主模型也不认识观测路径。
+支持 `exact` / `nearest` / `linear` 三种日期匹配，逐点记录匹配方式；输出
+MAE、RMSE、平均相对误差、期末误差、年际趋势误差，以及 `report.md`、`comparison.png`、
+`matched_points.csv`。观测点不足以估趋势时，报告写不确定性说明而不是报错。
+
 ## 配置结构
 
 ```
 model.yaml                     主配置：时间范围、元素列表、各输入接线、输出选项
 field.yaml                     田块：编号、面积、经纬度
 soil.csv                       土壤剖面：逐层的深度、容重、pH、有机质、黏粒、CEC、初始含量
-deposition.csv                 逐日干/湿沉降通量
+deposition.csv                 逐日干/湿沉降通量（或 NetCDF + netcdf 块）
+elements/<元素>.yaml           可选：吸收模式与按元素诊断（如关闭径流的警告强度）
 defaults/*.yaml                默认参数库（每条必须带来源）
 management/fertilizer_events.csv
 management/irrigation_events.csv
 management/harvest_events.csv
 management/straw_events.csv
+validation.yaml                仅 validate 命令使用：观测列名、匹配规则与输出
 ```
 
 四张事件表的列契约：
@@ -186,7 +277,8 @@ management/straw_events.csv
 
 ## 输出列
 
-`daily.csv` 的列集合是**固定**的，包含全部已实现与未实现过程的通量列：
+三张频率表（`daily.csv` / `monthly.csv` / `annual.csv`）的列集合是**固定且相同**的，
+包含全部已实现与未实现过程的通量列：
 
 ```
 date
@@ -199,6 +291,8 @@ in_total / out_total / net_flux / cumulative_input / cumulative_output / closure
 ```
 
 未启用过程的列恒为 0，但不会消失——这样升级版本时下游脚本不必改。
+`date` 列的取值随频率变化（`YYYY-MM-DD` / `YYYY-MM` / `YYYY`），列名不变。
+另有 `resolved_parameters.csv`（参数溯源）与 validate 的三件产物。
 
 ## 参数来源
 
@@ -211,8 +305,8 @@ in_total / out_total / net_flux / cumulative_input / cumulative_output / closure
 pytest
 ```
 
-176 个测试，覆盖单位换算、质量守恒（零输入 / 单一过程 / 综合输入输出）、
-事件处理、参数解析链、错误信息与输出契约。
+251 个测试，覆盖单位换算、质量守恒（零输入 / 单一过程 / 综合输入输出）、
+事件处理、参数解析链、错误信息、输出契约、BCF 模式、NetCDF 适配、观测对比与十年演示。
 
 ## 反馈
 
@@ -223,9 +317,11 @@ pytest
 
 1. 单田块、单层，未实现多层垂向迁移。
 2. 未实现淋溶、径流、侵蚀、风蚀、挥发与水分平衡（结果为累积上限）。
-3. 未区分重金属化学形态与有效态动态。
-4. 作物吸收发生在收获日，不模拟生育期内动态。
-5. 不使用 Fortran，首版为纯 Python 原型，性能不是当前优化目标。
+3. 未区分重金属化学形态与有效态动态；`basis: available` 会被拒绝。
+4. 作物吸收发生在收获日，不模拟生育期内动态；BCF 模式只作用于收获表。
+5. NetCDF 适配器要求一维坐标、三个配置维度、日尺度时间轴；掩码值直接报错。
+6. 观测对比只做误差记账，不替使用者判断结果是否可接受。
+7. 不使用 Fortran，首版为纯 Python 原型，性能不是当前优化目标。
 
 ## 许可
 

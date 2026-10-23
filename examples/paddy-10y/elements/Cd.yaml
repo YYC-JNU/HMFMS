@@ -1,0 +1,8 @@
+element: Cd
+crop_uptake:
+  mode: concentration
+  basis: total
+diagnostics:
+  runoff_disabled_severity: normal
+  runoff_disabled_note: Runoff disabled; Cd output is dominated by harvest, so the
+    cumulated stock may be overestimated by about one third.

@@ -1,0 +1,11 @@
+event_id,date,crop_id,organ,amount,return_fraction,Cd_mg_kg_override,Pb_mg_kg_override
+S2015,2015-10-20,rice,straw,6700,0.8,,
+S2016,2016-10-20,rice,straw,6700,0.8,,
+S2017,2017-10-20,rice,straw,6700,0.8,,
+S2018,2018-10-20,rice,straw,6700,0.8,,
+S2019,2019-10-20,rice,straw,6700,0.8,,
+S2020,2020-10-20,rice,straw,6700,0.8,,
+S2021,2021-10-20,rice,straw,6700,0.8,,
+S2022,2022-10-20,rice,straw,6700,0.8,,
+S2023,2023-10-20,rice,straw,6700,0.8,,
+S2024,2024-10-20,rice,straw,6700,0.8,,

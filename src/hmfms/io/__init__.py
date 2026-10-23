@@ -18,21 +18,31 @@ from hmfms.io.events import (
     load_irrigation_events,
     load_straw_events,
 )
+from hmfms.io.netcdf_deposition import extract_deposition_csv
 from hmfms.io.outputs import (
+    PLACEHOLDER_SUFFIX,
     SCHEMA_VERSION,
-    daily_columns,
-    write_daily_csv,
+    Frequency,
+    TableRecord,
+    output_columns,
+    tabulate,
     write_parameters_csv,
+    write_table_csv,
 )
 
 __all__ = [
+    "PLACEHOLDER_SUFFIX",
     "SCHEMA_VERSION",
     "DepositionSeries",
     "FertilizerEvent",
     "FertilizerSchedule",
-    "daily_columns",
+    "Frequency",
+    "TableRecord",
+    "extract_deposition_csv",
+    "output_columns",
     "load_deposition",
     "load_fertilizer_events",
-    "write_daily_csv",
+    "tabulate",
     "write_parameters_csv",
+    "write_table_csv",
 ]

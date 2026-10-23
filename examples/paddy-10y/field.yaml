@@ -1,0 +1,6 @@
+field_id: qiyang_paddy_demo
+area_ha: 1.0
+location:
+  latitude: 26.58
+  longitude: 111.85
+notes: Synthetic paddy from PARAMS_SOURCE section 13.4

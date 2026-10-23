@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from hmfms.cli import run_from_config
 from hmfms.core.errors import ParameterSourceError
 from hmfms.core.registry import FLUX_PROCESSES, PROCESS_NAMES, build_default_registry
-from hmfms.io.outputs import SCHEMA_VERSION, daily_columns
+from hmfms.io.outputs import SCHEMA_VERSION, output_columns
 
 from conftest import build_case
 
@@ -80,7 +80,7 @@ def test_all_process_columns_present_and_zero(minimal_case: Path) -> None:
     result = run_from_config(minimal_case)
     columns, rows = read_daily(result.output_path)
 
-    expected = daily_columns(("Cd", "Pb"), (1,))
+    expected = output_columns(("Cd", "Pb"), (1,))
     assert tuple(columns) == expected
 
     for element in ("Cd", "Pb"):

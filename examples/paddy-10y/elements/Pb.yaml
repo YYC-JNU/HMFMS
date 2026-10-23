@@ -1,0 +1,8 @@
+element: Pb
+crop_uptake:
+  mode: concentration
+  basis: total
+diagnostics:
+  runoff_disabled_severity: strong
+  runoff_disabled_note: Main output pathway missing (runoff is 46-73% of Pb output
+    in Zhejiang measurements); the cumulated stock may be substantially overestimated.

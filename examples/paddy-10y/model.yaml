@@ -1,0 +1,69 @@
+name: HMFMS 10-year paddy demo (Qiyang ranges)
+version: 0.1.0
+time:
+  start: '2015-01-01'
+  end: '2024-12-31'
+  timestep: 1D
+elements:
+- Cd
+- Pb
+element_configs:
+  Cd: elements/Cd.yaml
+  Pb: elements/Pb.yaml
+field: field.yaml
+inputs:
+  soil:
+    file: soil.csv
+    units:
+      depth: cm
+      bulk_density: kg/m3
+      concentration: mg/kg
+  deposition:
+    file: deposition.csv
+    format: csv
+    units: mg/m2/day
+    date_column: date
+    dry_columns:
+      Cd: dry_Cd
+      Pb: dry_Pb
+    wet_columns:
+      Cd: wet_Cd
+      Pb: wet_Pb
+    gap_policy: error
+    magnitude_check:
+      Cd:
+        min: 0.0
+        max: 0.1
+      Pb:
+        min: 0.0
+        max: 1.0
+parameters:
+  library: defaults/crop_params.yaml
+management:
+  fertilizer_events:
+    file: management/fertilizer_events.csv
+    units:
+      amount: kg/ha
+      concentration: mg/kg
+  irrigation_events:
+    file: management/irrigation_events.csv
+    units:
+      amount: mm
+      concentration: mg/L
+  harvest_events:
+    file: management/harvest_events.csv
+    units:
+      yield_rate: kg/ha
+      concentration: mg/kg
+  straw_events:
+    file: management/straw_events.csv
+    units:
+      amount: kg/ha
+      concentration: mg/kg
+output:
+  directory: output
+  interval:
+  - daily
+  - monthly
+  - annual
+closure_tolerance: 1.0e-08

@@ -1,0 +1,61 @@
+parameters:
+- key: fert.compound_npk.Cd
+  value: 1.31
+  unit: mg/kg
+  confidence: medium
+  applicability: Qiyang paddy NPK compound
+  source: J. Hazard. Mater. 2025, 499:140030, Table S2
+- key: fert.compound_npk.Pb
+  value: 0.4
+  unit: mg/kg
+  confidence: medium
+  applicability: National compound fertilizer Pb median
+  source: PARAMS_SOURCE.md section 4.3 (median 0.40)
+- key: fert.pig_manure.Cd
+  value: 1.63
+  unit: mg/kg
+  confidence: medium
+  applicability: Qiyang pig manure (fresh)
+  source: J. Hazard. Mater. 2025, 499:140030, Table S2
+- key: fert.pig_manure.Pb
+  value: 19.79
+  unit: mg/kg
+  confidence: medium
+  applicability: Pig manure (fresh)
+  source: PARAMS_SOURCE.md section 4.2 (Pb 19.79 mg/kg)
+- key: crop.rice.grain.Cd
+  value: 0.25
+  unit: mg/kg
+  confidence: medium
+  applicability: Qiyang paddy rice grain
+  source: J. Hazard. Mater. 2025, 499:140030, Table S4
+- key: crop.rice.grain.Pb
+  value: 0.05
+  unit: mg/kg
+  confidence: low
+  applicability: Demo assumption
+  source: examples/paddy-10y/README.md (demo assumption)
+- key: crop.rice.straw.Cd
+  value: 0.78
+  unit: mg/kg
+  confidence: medium
+  applicability: Qiyang paddy rice straw
+  source: J. Hazard. Mater. 2025, 499:140030, Table S4
+- key: crop.rice.straw.Pb
+  value: 0.6
+  unit: mg/kg
+  confidence: low
+  applicability: Demo assumption
+  source: examples/paddy-10y/README.md (demo assumption)
+- key: irr.canal.Cd
+  value: 0.00013
+  unit: mg/L
+  confidence: medium
+  applicability: Zhejiang surface water (0.13 ug/L)
+  source: Fu et al. 2021, J. Hazard. Mater. 412:125203 citing Shi 2019
+- key: irr.canal.Pb
+  value: 0.0
+  unit: mg/L
+  confidence: low
+  applicability: 'Demo assumption: no regional Pb measurement'
+  source: examples/paddy-10y/README.md (demo assumption)

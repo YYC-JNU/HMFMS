@@ -19,6 +19,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
 
+from hmfms.config.elements import UPTAKE_BCF, UPTAKE_CONCENTRATION, ElementConfig
 from hmfms.config.models import (
     FertilizerEventConfig,
     HarvestEventConfig,
@@ -178,6 +179,7 @@ def load_irrigation_events(
 
 
 HARVEST_DOC = "docs/parameters.md §1–2（作物器官含量）"
+BCF_DOC = "docs/parameters.md §3（作物富集系数区间）"
 HARVEST_REQUIRED = ("crop_id", "organ", "yield", "removal_fraction")
 
 
@@ -190,6 +192,7 @@ class HarvestEvent:
     yield_kg_ha: float
     removal_fraction: float
     concentration_mg_kg: dict[str, float]
+    bcf: dict[str, float]
     source: str
 
 
@@ -206,6 +209,87 @@ def crop_key(crop_id: str, organ: str, element: str) -> str:
     return f"crop.{crop_id}.{organ}.{element}"
 
 
+def bcf_key(crop_id: str, organ: str, element: str) -> str:
+    """BCF 的参数库键：``bcf.<作物>.<器官>.<元素>``。
+
+    元素放在键的末尾，与 ``crop.*`` / ``fert.*`` / ``irr.*`` 同一套约定；
+    跨元素同名参数因此不会串味（ADR-0010）。
+    """
+    return f"bcf.{crop_id}.{organ}.{element}"
+
+
+def _harvest_uptake_value(
+    *,
+    where: str,
+    crop_id: str,
+    organ: str,
+    element: str,
+    mode: str,
+    concentration_override: float | None,
+    bcf_override: float | None,
+    spec: HarvestEventConfig,
+    resolver: ParameterResolver,
+) -> tuple[float | None, float | None]:
+    """按模式解析一个元素的器官参数，并拒绝"用错列"的覆盖值。"""
+    concentration_column = f"{element}_mg_kg_override"
+    bcf_column = f"{element}_bcf_override"
+
+    if mode == UPTAKE_BCF:
+        if concentration_override is not None:
+            raise ValueError(
+                f"{where} 列 {concentration_column!r} 只在 concentration 模式下有效；"
+                f"元素 {element} 当前是 bcf 模式，请改用 {bcf_column!r}，"
+                "或切换到 concentration 模式。"
+            )
+        key = bcf_key(crop_id, organ, element)
+        value = resolver.resolve(
+            ParameterRequest(
+                key=key,
+                unit="-",
+                dimension="dimensionless",
+                event=bcf_override,
+                event_source=where,
+                selected=key,
+                doc_section=BCF_DOC,
+                context=(
+                    f"{where} 作物 {crop_id!r} 器官 {organ!r} 的 {element} BCF"
+                ),
+                suggestions=(
+                    f"在事件行填入 {bcf_column} 覆盖值",
+                    f"在参数库中新增键 {key!r} 并写明来源",
+                ),
+            )
+        )
+        if value < 0.0:
+            raise ValueError(f"{where} BCF 为负 {value}，富集系数不得为负")
+        return None, value
+
+    if bcf_override is not None:
+        raise ValueError(
+            f"{where} 列 {bcf_column!r} 只在 bcf 模式下有效；"
+            f"元素 {element} 当前是 concentration 模式，请改用 "
+            f"{concentration_column!r}，或切换到 bcf 模式。"
+        )
+    key = crop_key(crop_id, organ, element)
+    value = resolver.resolve(
+        ParameterRequest(
+            key=key,
+            unit=spec.units.concentration,
+            dimension="concentration",
+            event=concentration_override,
+            event_source=where,
+            selected=key,
+            doc_section=HARVEST_DOC,
+            context=f"{where} 作物 {crop_id!r} 器官 {organ!r} 的 {element} 含量",
+            suggestions=(
+                f"在事件行填入 {concentration_column} 覆盖值",
+                f"在参数库中新增键 {key!r} 并写明来源",
+            ),
+        )
+    )
+    return value, None
+
+
 def load_harvest_events(
     path: Path,
     spec: HarvestEventConfig,
@@ -213,6 +297,7 @@ def load_harvest_events(
     resolver: ParameterResolver,
     start: date,
     end: date,
+    uptake: Mapping[str, ElementConfig] | None = None,
 ) -> HarvestSchedule:
     if not path.is_file():
         raise FileNotFoundError(f"收获事件表不存在：{path}")
@@ -282,27 +367,36 @@ def load_harvest_events(
             raise ValueError(f"{where} removal_fraction 应在 [0, 1]，收到 {removal}")
 
         concentration: dict[str, float] = {}
+        bcf_values: dict[str, float] = {}
         for element in elements:
-            override_column = f"{element}_mg_kg_override"
-            override = (
-                _cell(row, override_column) if override_column in fields else None
+            mode = (
+                uptake[element].uptake_mode
+                if uptake is not None
+                else UPTAKE_CONCENTRATION
             )
-            concentration[element] = resolver.resolve(
-                ParameterRequest(
-                    key=crop_key(crop_id, organ, element),
-                    unit=spec.units.concentration,
-                    dimension="concentration",
-                    event=override,
-                    event_source=where,
-                    selected=crop_key(crop_id, organ, element),
-                    doc_section=HARVEST_DOC,
-                    context=f"{where} 作物 {crop_id!r} 器官 {organ!r} 的 {element} 含量",
-                    suggestions=(
-                        f"在事件行填入 {override_column} 覆盖值",
-                        f"在参数库中新增键 {crop_key(crop_id, organ, element)!r} 并写明来源",
-                    ),
-                )
+            concentration_column = f"{element}_mg_kg_override"
+            bcf_column = f"{element}_bcf_override"
+            concentration_value, bcf_value = _harvest_uptake_value(
+                where=where,
+                crop_id=crop_id,
+                organ=organ,
+                element=element,
+                mode=mode,
+                concentration_override=(
+                    _cell(row, concentration_column)
+                    if concentration_column in fields
+                    else None
+                ),
+                bcf_override=(
+                    _cell(row, bcf_column) if bcf_column in fields else None
+                ),
+                spec=spec,
+                resolver=resolver,
             )
+            if concentration_value is not None:
+                concentration[element] = concentration_value
+            if bcf_value is not None:
+                bcf_values[element] = bcf_value
 
         by_day.setdefault(day, []).append(
             HarvestEvent(
@@ -313,6 +407,7 @@ def load_harvest_events(
                 yield_kg_ha=yield_kg_ha,
                 removal_fraction=removal,
                 concentration_mg_kg=concentration,
+                bcf=bcf_values,
                 source=where,
             )
         )

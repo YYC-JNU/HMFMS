@@ -72,9 +72,10 @@ def test_local_values_are_recorded_as_tier_two(tmp_path: Path) -> None:
 
     records = read_parameters(result.parameters_path)
     assert records, "数据齐全时溯源表也必须有内容"
-    assert {row["tier"] for row in records} == {"2"}
-    assert {row["tier_label"] for row in records} == {"local-measured"}
-    assert {row["key"] for row in records} == {
+    soil_rows = [row for row in records if row["key"].startswith("soil.")]
+    assert {row["tier"] for row in soil_rows} == {"2"}
+    assert {row["tier_label"] for row in soil_rows} == {"local-measured"}
+    assert {row["key"] for row in soil_rows} == {
         "soil.bulk_density",
         "soil.ph",
         "soil.organic_matter",
@@ -82,6 +83,10 @@ def test_local_values_are_recorded_as_tier_two(tmp_path: Path) -> None:
         "soil.cec",
         "soil.initial.Cd",
     }
+    # 吸收模式是配置选择，单独成行（T08）；未提供元素文件时默认 concentration。
+    mode = next(row for row in records if row["key"] == "crop_uptake.mode.Cd")
+    assert mode["note"].startswith("concentration")
+    assert mode["value"] == ""
 
 
 def test_local_source_points_at_the_row(tmp_path: Path) -> None:
@@ -183,6 +188,7 @@ def test_provenance_columns_are_complete(tmp_path: Path) -> None:
         "tier_label",
         "source",
         "confidence",
+        "note",
     ]
 
 

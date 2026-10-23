@@ -14,8 +14,10 @@ from pathlib import Path
 
 import yaml
 
+from hmfms.config.elements import ElementConfig
 from hmfms.config.field import FieldConfig, SoilLayer, SoilProfile
 from hmfms.config.models import ModelConfig, SoilUnitsConfig
+from hmfms.config.validation import ValidationConfig
 from hmfms.parameters.resolver import ParameterRequest, ParameterResolver
 from hmfms.utils.units import to_internal
 
@@ -45,8 +47,41 @@ def load_model_config(path: Path) -> ModelConfig:
     return ModelConfig.model_validate(_read_yaml(path))
 
 
+def load_validation_config(path: Path) -> ValidationConfig:
+    return ValidationConfig.model_validate(_read_yaml(path))
+
+
 def load_field_config(path: Path) -> FieldConfig:
     return FieldConfig.model_validate(_read_yaml(path))
+
+
+def load_element_config(path: Path, element: str) -> ElementConfig:
+    """读一个元素配置，并校验它声明的元素名与引用键一致。"""
+    config = ElementConfig.model_validate(_read_yaml(path))
+    if config.element != element:
+        raise ValueError(
+            f"{path} 声明 element: {config.element!r}，"
+            f"但 model.yaml 以 {element!r} 引用它；两处必须一致。"
+        )
+    return config
+
+
+def load_element_configs(base: Path, model: ModelConfig) -> dict[str, ElementConfig]:
+    """为每个已声明元素返回配置；未提供文件的元素取默认（concentration）。
+
+    默认值是**数据结构**的默认（浓度模式），不是物理参数默认值——BCF
+    的具体数值仍然只能来自参数库或事件覆盖（ADR-0010）。
+    """
+    mapping = model.element_configs or {}
+    configs: dict[str, ElementConfig] = {}
+    for element in model.elements:
+        candidate = mapping.get(element)
+        if candidate is None:
+            configs[element] = ElementConfig(element=element)
+            continue
+        path = candidate if candidate.is_absolute() else base / candidate
+        configs[element] = load_element_config(path, element)
+    return configs
 
 
 def initial_column(element: str) -> str:

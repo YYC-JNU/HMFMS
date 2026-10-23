@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hmfms"
-# PEP 440 形式的 0.1.0-alpha；标签写作 v0.1.0-alpha
-version = "0.1.0a1"
+# PEP 440 形式的 0.2.0-alpha；标签写作 v0.2.0-alpha
+version = "0.2.0a1"
 description = "HMFMS — 配置驱动的农田重金属质量平衡模型"
 readme = "README.md"
 requires-python = ">=3.10"

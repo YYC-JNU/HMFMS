@@ -3,7 +3,7 @@
 断言的是**外部可观察行为**：给定输入与单位，输出的数值是物理上正确的那个。
 不测内部实现，不 mock。
 
-数值锚点来自 ``docs/equations.md`` §6 与 §7。
+数值锚点来自项目说明中的换算表与量级基准。
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ TOL = 1e-12
 @pytest.mark.parametrize(
     ("rate", "conc", "expected"),
     [
-        (100.0, 10.0, 0.1),  # equations.md §6 的示例
+        (100.0, 10.0, 0.1),  # 换算表示例
         (0.0, 10.0, 0.0),  # 零施用量
         (1516.0, 1.63, 1516.0 * 1.63 / 10_000.0),  # 猪粪实际量级
     ],
@@ -46,7 +46,7 @@ def test_fertilizer_mass_per_area(rate: float, conc: float, expected: float) -> 
 @pytest.mark.parametrize(
     ("amount_mm", "conc_mg_l", "expected"),
     [
-        (50.0, 0.002, 0.1),  # equations.md §6 的示例
+        (50.0, 0.002, 0.1),  # 换算表示例
         (0.0, 0.002, 0.0),  # 零灌溉
         (10.0, 0.13, 1.3),  # 0.13 μg/L 换算后为 1.3e-4 mg/L 的量级
     ],
@@ -98,7 +98,7 @@ def test_precipitation_deposition_scales_with_precipitation() -> None:
 
 
 def test_soil_mass_per_area_default_profile() -> None:
-    """0–20 cm、1300 kg·m⁻³ → 260 kg·m⁻²（equations.md §6）。"""
+    """0–20 cm、1300 kg·m⁻³ → 260 kg·m⁻²。"""
     assert soil_mass_per_area(1300.0, 0.2) == pytest.approx(260.0, abs=1e-9)
 
 
@@ -129,7 +129,7 @@ def test_mass_to_concentration_rejects_zero_soil_mass() -> None:
 
 
 def test_annual_accumulation_magnitude() -> None:
-    """0.705 mg·m⁻²·a⁻¹ 的净累积 → 约 0.0027 mg·kg⁻¹·a⁻¹（equations.md §7）。
+    """0.705 mg·m⁻²·a⁻¹ 的净累积 → 约 0.0027 mg·kg⁻¹·a⁻¹。
 
     这是全模型的量级标尺：若实现跑出的年增量与此差一个数量级，一定是
     单位或系数错了。

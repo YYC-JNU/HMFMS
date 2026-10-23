@@ -64,7 +64,7 @@ def _num(where: str, row: dict[str, str], key: str) -> float:
         raise ValueError(f"{where} 列 {key!r} 的值 {raw!r} 不是数字") from None
 
 
-SOIL_DOC = "docs/PARAMS_SOURCE.md §2（土壤参数）"
+SOIL_DOC = "docs/parameters.md §2（土壤属性与初始含量）"
 
 
 def _display_source(where: str) -> str:

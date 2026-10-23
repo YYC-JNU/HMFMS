@@ -139,7 +139,7 @@ def test_missing_everywhere_raises_with_location(tmp_path: Path) -> None:
     message = str(excinfo.value)
     assert "soil.ph" in message
     assert "soil.csv:2" in message
-    assert "docs/PARAMS_SOURCE.md" in message
+    assert "docs/parameters.md" in message
     assert "处置" in message
     assert "文献默认" in message  # 已尝试链里要说明试过哪几级
 

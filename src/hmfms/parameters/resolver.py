@@ -88,7 +88,7 @@ class ParameterResolver:
     """把请求解析成数值，并记录每个值的来龙去脉。"""
 
     library: Mapping[str, ParameterEntry]
-    document: str = "docs/PARAMS_SOURCE.md"
+    document: str = "docs/parameters.md"
     _records: list[Provenance] = field(default_factory=list)
 
     def resolve(self, request: ParameterRequest) -> float:

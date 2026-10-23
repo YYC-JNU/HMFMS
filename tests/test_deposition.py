@@ -132,7 +132,7 @@ def test_closure_stays_within_float_noise(tmp_path: Path) -> None:
 
     ``start + Σin`` 与 ``(((start + d1) + d2) + …)`` 的结合次序不同，
     结果必然差最后几位。这是 IEEE-754 的性质，不是模型误差——
-    真正的判断标准是**相对**残差远低于 1e-8（见 equations.md §1）。
+    真正的判断标准是**相对**残差远低于 1e-8。
     """
     config = make_case(tmp_path, days=5)
     result = run_from_config(config)

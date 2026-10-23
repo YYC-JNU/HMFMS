@@ -1,7 +1,7 @@
 """作物收获模块。
 
 ``F[mg·m⁻²] = Σ_organ  Y[kg·ha⁻¹] × C[mg·kg⁻¹] × f_removal / 10000``
-（equations.md 式 11）
+按器官逐个计算后求和。
 
 吸收模式（固定浓度 / BCF）的差异在装载期解决：事件带来的
 ``concentration_mg_kg`` 已经是最终含量，本模块只做乘法。

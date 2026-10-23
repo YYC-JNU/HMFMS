@@ -37,7 +37,7 @@ from hmfms.utils.units import mass_per_area_from_rate, to_internal
 
 logger = logging.getLogger(__name__)
 
-FERTILIZER_DOC = "docs/PARAMS_SOURCE.md §4（肥料与粪肥的重金属含量）"
+FERTILIZER_DOC = "docs/parameters.md §1–2（肥料重金属含量）"
 REQUIRED_COLUMNS = ("fertilizer_id", "amount")
 
 
@@ -59,7 +59,7 @@ class FertilizerSchedule:
         return {EVENTS_FERTILIZER: self.by_day.get(day, ())}
 
 
-IRRIGATION_DOC = "docs/PARAMS_SOURCE.md §1.4（灌溉水重金属浓度）"
+IRRIGATION_DOC = "docs/parameters.md §1–2（灌溉水浓度）"
 IRRIGATION_REQUIRED = ("amount", "water_source")
 
 
@@ -177,7 +177,7 @@ def load_irrigation_events(
     return IrrigationSchedule(by_day=frozen)
 
 
-HARVEST_DOC = "docs/PARAMS_SOURCE.md §3（作物参数）"
+HARVEST_DOC = "docs/parameters.md §1–2（作物器官含量）"
 HARVEST_REQUIRED = ("crop_id", "organ", "yield", "removal_fraction")
 
 
@@ -344,7 +344,7 @@ def _cell(row: dict[str, str], column: str) -> float | None:
     return float(text) if text else None
 
 
-STRAW_DOC = "docs/PARAMS_SOURCE.md §3（作物参数）"
+STRAW_DOC = "docs/parameters.md §1–2（作物器官含量）"
 STRAW_REQUIRED = ("crop_id", "organ", "amount", "return_fraction")
 
 

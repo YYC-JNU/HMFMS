@@ -88,7 +88,8 @@ class SoilInputConfig(_Strict):
 class MagnitudeLimit(_Strict):
     """量级检查区间，单位与内部通量一致（mg·m⁻²·d⁻¹）。
 
-    阈值必须由配置给出，代码里不设默认——见 docs/HARDCODE_AUDIT.md §4 R3。
+    阈值必须由配置给出，代码里不设默认——量级检查只用于提示，
+    不能替代"文件内单位必须声明"这道校验。
     """
 
     min: float = Field(ge=0.0)

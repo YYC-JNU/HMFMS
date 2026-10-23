@@ -1,6 +1,6 @@
 """守卫测试：源码里不得出现元素名与示例数值。
 
-这两条对应 ``docs/HARDCODE_AUDIT.md`` §5。它们不测行为，只测**纪律**：
+这两条不测行为，只测**纪律**：
 一旦有人在 ``src/`` 里写了 ``if element == "Cd"`` 或把示例容重写死，
 测试立刻失败。
 
@@ -19,7 +19,7 @@ SOURCE_ROOT = Path(__file__).resolve().parent.parent / "src" / "hmfms"
 
 ELEMENT_SYMBOLS = frozenset({"Cd", "Pb", "As", "Cu", "Zn", "Hg", "Ni", "Cr"})
 
-# docs/HARDCODE_AUDIT.md §3 里点名过的示例值：只能出现在 tests/ 或 examples/
+# 文档里点名过的示例值：只能出现在 tests/ 或 examples/
 MAGIC_SOIL_VALUES = frozenset({1300.0, 260.0, 0.35, 0.0027})
 
 

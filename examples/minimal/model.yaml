@@ -1,0 +1,73 @@
+name: HMFMS 最小算例
+version: "0.1.0"
+
+time:
+  start: "2020-01-01"
+  end: "2020-01-10"
+  timestep: "1D"
+
+elements:
+  - Cd
+  - Pb
+
+field: field.yaml
+
+inputs:
+  soil:
+    file: soil.csv
+    units:
+      depth: cm
+      bulk_density: kg/m3
+      concentration: mg/kg
+  deposition:
+    file: deposition.csv
+    units: mg/m2/day
+    date_column: date
+    dry_columns:
+      Cd: dry_Cd
+      Pb: dry_Pb
+    wet_columns:
+      Cd: wet_Cd
+      Pb: wet_Pb
+    gap_policy: error
+    # 量级区间必须由配置给出，代码里没有默认阈值（HARDCODE_AUDIT §4 R3）。
+    # 取值依据：PARAMS_SOURCE.md §1.1（中国分区域沉降，换算为日均）。
+    magnitude_check:
+      Cd:
+        min: 0.0
+        max: 0.1
+      Pb:
+        min: 0.0
+        max: 1.0
+
+parameters:
+  library: defaults/soil_params.yaml
+
+management:
+  fertilizer_events:
+    file: management/fertilizer_events.csv
+    units:
+      amount: kg/ha
+      concentration: mg/kg
+  irrigation_events:
+    file: management/irrigation_events.csv
+    units:
+      amount: mm
+      concentration: mg/L
+  harvest_events:
+    file: management/harvest_events.csv
+    units:
+      yield_rate: kg/ha
+      concentration: mg/kg
+  straw_events:
+    file: management/straw_events.csv
+    units:
+      amount: kg/ha
+      concentration: mg/kg
+
+output:
+  directory: output
+  interval:
+    - daily
+
+closure_tolerance: 1.0e-8

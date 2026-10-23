@@ -1,0 +1,55 @@
+# 默认参数库（示例）
+#
+# 规则（ADR-0010）：
+#   1. 每条必须有 source；source 为空的条目会被忽略并告警。
+#   2. 库只提供"文献默认"，永远不覆盖事件级覆盖与田块实测。
+#   3. 键名约定：soil.<属性>、soil.initial.<元素>。
+#
+# 本示例故意只放一条：soil.ph 在 soil.csv 里留空，用来演示
+# "实测缺失 → 回落到文献默认" 的第四级。
+
+parameters:
+  - key: soil.ph
+    value: 6.62
+    unit: "-"
+    confidence: medium
+    applicability: 湖南祁阳稻田，n=56，2019
+    source: "J. Hazard. Mater. 2025, 499:140030, Table S4（稻田 pH 均值 6.62，SD 0.88）"
+
+  # 分品类肥料 Cd：湖南祁阳实测（同一研究，与田块所在区域一致）
+  - key: fert.compound_npk.Cd
+    value: 1.31
+    unit: mg/kg
+    confidence: medium
+    applicability: 湖南祁阳，复合肥 NPK
+    source: "J. Hazard. Mater. 2025, 499:140030, Table S2（NPK 复合肥 Cd 1.31 mg/kg）"
+
+  - key: fert.pig_manure.Cd
+    value: 1.63
+    unit: mg/kg
+    confidence: medium
+    applicability: 湖南祁阳，猪粪（鲜重）
+    source: "J. Hazard. Mater. 2025, 499:140030, Table S2（猪粪 Cd 1.63 mg/kg）"
+
+  # 水稻器官 Cd 含量：同一研究的实测均值
+  - key: crop.rice.grain.Cd
+    value: 0.25
+    unit: mg/kg
+    confidence: medium
+    applicability: 湖南祁阳稻田，稻米（n=56，2019）
+    source: "J. Hazard. Mater. 2025, 499:140030, Table S4（稻米 Cd 均值 0.25 mg/kg）"
+
+  - key: crop.rice.straw.Cd
+    value: 0.78
+    unit: mg/kg
+    confidence: low
+    applicability: 湖南祁阳稻田，秸秆（n=56，2019，分布右偏）
+    source: "J. Hazard. Mater. 2025, 499:140030, Table S4（秸秆 Cd 均值 0.78 mg/kg）"
+
+  # 灌溉水 Cd：浙江稻区实测均值 0.13 μg/L（= 0.00013 mg/L）
+  - key: irr.canal.Cd
+    value: 0.00013
+    unit: mg/L
+    confidence: low
+    applicability: 浙江稻区地表水，一般农区
+    source: "Fu et al. 2021, J. Hazard. Mater. 412:125203 引述 Shi 2019（浙江灌溉水 Cd 0.13 μg/L）"

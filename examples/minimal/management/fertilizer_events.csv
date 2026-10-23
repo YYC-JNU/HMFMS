@@ -1,0 +1,3 @@
+event_id,date,fertilizer_id,amount,Cd_mg_kg_override,Pb_mg_kg_override,note
+F001,2020-01-03,compound_npk,150,,2.5,Cd 取参数库（三级）；Pb 取事件覆盖（一级）
+F002,2020-01-06,pig_manure,800,,19.8,Cd 取参数库（三级）；Pb 取事件覆盖（一级）

@@ -1,0 +1,2 @@
+event_id,date,crop_id,organ,amount,return_fraction,Cd_mg_kg_override,Pb_mg_kg_override
+S001,2020-01-09,rice,straw,6700,0.7,,0.6

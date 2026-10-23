@@ -1,0 +1,3 @@
+event_id,date,amount,water_source,Cd_mg_L_override,Pb_mg_L_override
+I001,2020-01-04,50,canal,,0.002
+I002,2020-01-04,30,canal,,0.002

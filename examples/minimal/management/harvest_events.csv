@@ -1,0 +1,2 @@
+event_id,date,crop_id,organ,yield,removal_fraction,Cd_mg_kg_override,Pb_mg_kg_override
+H001,2020-01-08,rice,grain,6500,1.0,,0.05

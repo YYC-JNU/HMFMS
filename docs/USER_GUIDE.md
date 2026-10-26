@@ -5,7 +5,8 @@
 | 项 | 内容 |
 |---|---|
 | 文档版本 | 1.0 |
-| 对应软件版本 | `0.2.0-alpha`（PEP 440: `0.2.0a1`） |
+| 对应软件版本 | `0.2.1-alpha`（PEP 440: `0.2.1a1`） |
+| 发布类型 | 文档补丁（模型行为与输出契约不变） |
 | 输出契约版本 | `schema_version = 4` |
 | 适用读者 | 使用 HMFMS 做农田重金属质量平衡研究的科研人员与研究生 |
 | 文档范围 | 安装、配置、输入、运行、输出、观测对比、演示、排错 |
@@ -113,7 +114,7 @@ HMFMS 是一个**配置驱动、质量守恒、过程可插拔**的农田重金�
 
 ## 1.6 版本与兼容性
 
-- 当前版本 `0.2.0-alpha`，输出 `schema_version = 4`。
+- 当前版本 `0.2.1-alpha`，输出 `schema_version = 4`。
 - 相邻版本之间，**输出列只增不删、不改名**；需要变更时提升 `schema_version`。
 - 配置文件对未知字段**直接报错**，不静默忽略。
 - 具体版本差异见附录 H。
@@ -191,7 +192,7 @@ pip install -e ".[dev]"          # 在仓库内升级
 pip uninstall hmfms              # 卸载
 ```
 
-正式研究请固定到某个 tag（例如 `v0.2.0-alpha`），并在论文/报告中记录版本与配置指纹。
+正式研究请固定到某个 tag（例如 `v0.2.1-alpha`），并在论文/报告中记录版本与配置指纹。
 
 ## 2.6 获取帮助
 
@@ -1869,7 +1870,7 @@ v1 不支持，`basis: available` 会直接报错。有效态只作诊断，不�
 
 一份可复核的运行报告至少包含：
 
-- [ ] 软件版本与 tag（如 `v0.2.0-alpha`）；
+- [ ] 软件版本与 tag（如 `v0.2.1-alpha`）；
 - [ ] `schema_version` 与配置指纹；
 - [ ] 模拟时间范围、元素、土层；
 - [ ] 输入数据来源与单位；
@@ -1895,8 +1896,8 @@ v1 不支持，`basis: available` 会直接报错。有效态只作诊断，不�
 
 当前没有正式期刊论文。建议引用软件本身：
 
-> HMFMS — Heavy Metal Flux Model in Soil, version 0.2.0-alpha,
-> https://github.com/YYC-JNU/HMFMS (tag: v0.2.0-alpha).
+> HMFMS — Heavy Metal Flux Model in Soil, version 0.2.1-alpha,
+> https://github.com/YYC-JNU/HMFMS (tag: v0.2.1-alpha).
 
 方法描述可引用模型采用的公开文献与参数来源（见 `docs/parameters.md`），
 并在方法中写明：单田块、0–20 cm、日步长、关闭水文过程、结果为累积上限。
@@ -2174,6 +2175,7 @@ python -m hmfms validate examples/paddy-10y/validation.yaml
 |---|---|---|---|
 | 0.1.0-alpha | 骨架、沉降、参数链、施肥、灌溉、收获（浓度）、秸秆 | 176 | 2 |
 | 0.2.0-alpha | 新增 BCF、输出契约、NetCDF、观测对比、十年演示 | 251 | 4 |
+| 0.2.1-alpha | 发布完整用户指南；模型行为与 `schema_version` 不变 | 251 | 4 |
 
 ## H.2 从 0.1 迁移到 0.2
 
@@ -2189,4 +2191,4 @@ python -m hmfms validate examples/paddy-10y/validation.yaml
 
 - 输出列只增不删、不改名；变更时提升 `schema_version`。
 - 配置对未知字段报错；升级后若报 `extra_forbidden`，说明使用了已删除/拼错的键。
-- `0.2.0-alpha` 仍是 pre-release；正式研究请固定 tag，并在报告中写版本与指纹。
+- `0.2.1-alpha` 仍是 pre-release；正式研究请固定 tag，并在报告中写版本与指纹。

@@ -1,5 +1,7 @@
 # HMFMS — Heavy Metal Flux Model in Soil
 
+[![tests](https://github.com/YYC-JNU/HMFMS/actions/workflows/tests.yml/badge.svg)](https://github.com/YYC-JNU/HMFMS/actions/workflows/tests.yml)
+
 > ## ⚠️ 状态：0.4.0-alpha — 水文过程已部分落地，仍是研究原型
 >
 > **0.4.0-alpha 新增**：溶解态径流、颗粒态侵蚀、逐日水量诊断列；输出契约升到

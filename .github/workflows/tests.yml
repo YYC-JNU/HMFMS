@@ -1,0 +1,48 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      # 数值断言在 pytest 内（守恒、输出契约、演示区间、示例手算值）。
+      - name: Tests
+        run: python -m pytest
+
+      # 冒烟：验证 CLI 入口与十年演示在干净环境可运行（产物已被 .gitignore 忽略）。
+      - name: Demo smoke
+        run: python -m hmfms demo --no-validate
+
+      # 冒烟：验证 schema 5 的水量列路径可运行。
+      - name: Minimal water smoke
+        run: python -m hmfms run examples/minimal-water/model.yaml

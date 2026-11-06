@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from hmfms.config.elements import ElementConfig
+from hmfms.config.elements import LEACHING_LABILE, ElementConfig
 from hmfms.config.models import OUTPUT_FREQUENCIES
 from hmfms.config.loader import (
     load_element_configs,
@@ -20,7 +20,7 @@ from hmfms.config.loader import (
     load_model_config,
     load_soil_profile,
 )
-from hmfms.core.drivers import DailyDriver
+from hmfms.core.drivers import CombinedDrivers, DailyDriver
 from hmfms.core.events import CombinedEvents, EventSchedule
 from hmfms.core.integrator import DayRecord, integrate
 from hmfms.core.registry import (
@@ -44,6 +44,7 @@ from hmfms.io.fingerprint import (
     model_material,
 )
 from hmfms.io.netcdf_deposition import extract_deposition_csv
+from hmfms.io.weather import WeatherSeries, load_weather
 from hmfms.io.outputs import (
     PLACEHOLDER_SUFFIX,
     tabulate,
@@ -51,11 +52,15 @@ from hmfms.io.outputs import (
     write_table_csv,
 )
 from hmfms.parameters.library import load_library
-from hmfms.parameters.resolver import ParameterResolver
+from hmfms.parameters.resolver import ParameterRequest, ParameterResolver
 from hmfms.schemes.deposition import DepositionModule
 from hmfms.schemes.fertilization import FertilizationModule
 from hmfms.schemes.harvest import HarvestModule
+from hmfms.schemes.erosion import ErosionModule
 from hmfms.schemes.irrigation import IrrigationModule
+from hmfms.schemes.leaching import LeachingModule
+from hmfms.schemes.runoff import RunoffModule
+from hmfms.schemes.transport import f_exch_key, kd_key
 from hmfms.schemes.straw import StrawRemovalModule, StrawReturnModule
 from hmfms.validation import run_validation
 
@@ -112,6 +117,9 @@ def _reject_double_handled_organs(
 
 
 HYDROLOGY_PROCESSES: tuple[str, ...] = ("leaching", "runoff", "erosion")
+LEACHING_DOC = "docs/parameters.md §2.3（淋溶、径流与侵蚀）"
+HYDROLOGY_DOC = "docs/parameters.md §2.3（淋溶、径流与侵蚀）"
+EROSION_DOC = "docs/parameters.md §2.3（淋溶、径流与侵蚀）"
 
 
 def _log_process_caveats(
@@ -131,6 +139,22 @@ def _log_process_caveats(
             "在未启用淋溶、径流、侵蚀的条件下，"
             "本结果为土壤重金属累积的上限。"
         )
+    else:
+        if "leaching" not in disabled and "runoff" in disabled:
+            logger.warning(
+                "淋溶已启用但径流未启用：下渗量按降水盈余全量计算，"
+                "因此 leaching 是当前水量下的上限。"
+            )
+        if "runoff" not in disabled:
+            logger.warning(
+                "径流只记溶解态；随泥沙流失的颗粒态记在 erosion 列，"
+                "两者不可相加（ADR-0012）。"
+            )
+        if "erosion" not in disabled:
+            logger.warning(
+                "侵蚀速率按年值均匀摊到每日，不含日侵蚀力驱动；"
+                "只适用于年尺度收支，不能解释单次暴雨。"
+            )
 
     if "runoff" not in disabled:
         return
@@ -222,8 +246,10 @@ def run_from_config(
     )
 
     drivers: DailyDriver | None = None
+    driver_sources: list[DailyDriver] = []
     deposition_series: DepositionSeries | None = None
     deposition_path: Path | None = None
+    weather_series: WeatherSeries | None = None
     overrides: dict[str, FluxModule] = {}
     deposition = model.inputs.deposition
     if deposition is not None:
@@ -249,8 +275,225 @@ def run_from_config(
             model.time.start,
             model.time.end,
         )
-        drivers = deposition_series
+        driver_sources.append(deposition_series)
         overrides["deposition"] = DepositionModule()
+
+    weather_spec = model.inputs.weather
+    if weather_spec is not None:
+        weather_series = load_weather(
+            _input(weather_spec.file),
+            weather_spec,
+            model.time.start,
+            model.time.end,
+        )
+        driver_sources.append(weather_series)
+
+    leaching_elements = sorted(
+        element
+        for element, config in element_configs.items()
+        if config.leaching_enabled
+    )
+    runoff_elements = sorted(
+        element
+        for element, config in element_configs.items()
+        if config.runoff.enabled
+    )
+    erosion_elements = sorted(
+        element
+        for element, config in element_configs.items()
+        if config.erosion.enabled
+    )
+    transport_elements = sorted(
+        element
+        for element, config in element_configs.items()
+        if config.uses_transport
+    )
+
+    runoff_fraction = model.hydrology.runoff_fraction
+    if runoff_elements and runoff_fraction is None:
+        raise ValueError(
+            f"元素 {', '.join(runoff_elements)} 启用了 runoff，"
+            "但缺少 hydrology.runoff_fraction：径流需要知道降水盈余中"
+            "有多少变成地表径流。请在 model.yaml 增加该键（0–1），"
+            "或关闭 runoff.enabled。"
+        )
+    if runoff_fraction is not None and not runoff_elements:
+        raise ValueError(
+            "已配置 hydrology.runoff_fraction，但没有任何元素启用 runoff。"
+            "径流水量若不计入任何通量，会让下渗量悄悄变少——"
+            "请删除该键，或在某元素的 elements/<E>.yaml 中启用 runoff。"
+        )
+    if runoff_fraction is not None:
+        runoff_fraction = resolver.resolve(
+            ParameterRequest(
+                key="hydrology.runoff_fraction",
+                unit="-",
+                dimension="dimensionless",
+                local=runoff_fraction,
+                local_source="model.yaml:hydrology.runoff_fraction",
+                doc_section=HYDROLOGY_DOC,
+                context="地表径流占降水盈余的比例",
+                suggestions=(
+                    "用本地径流观测或文献给出 0–1 的比例，并在报告中说明来源",
+                    "若没有径流数据，删除该键并关闭 runoff.enabled",
+                ),
+            )
+        )
+
+    transport_with_water = sorted(set(leaching_elements) | set(runoff_elements))
+    if transport_with_water and weather_spec is None:
+        names = "、".join(
+            name
+            for name, items in (
+                ("leaching", leaching_elements),
+                ("runoff", runoff_elements),
+            )
+            if items
+        )
+        raise ValueError(
+            f"元素 {', '.join(transport_with_water)} 启用了 {names}，"
+            "但缺少 inputs.weather：溶解态输移需要逐日降水量（必需）与"
+            "蒸散量（可选）来分配径流与下渗。请在 model.yaml 增加 "
+            "inputs.weather，或关闭对应过程的 enabled。"
+        )
+
+    if transport_elements:
+        kd_by_element: dict[str, float] = {}
+        f_exch_by_element: dict[str, float] = {}
+        for element in transport_elements:
+            config = element_configs[element]
+            basis = config.kd_basis
+            resolver.record_choice(
+                key=f"kd_basis.{element}",
+                choice=basis,
+                source=str(configured_paths.get(element, "默认配置")),
+                note=(
+                    f"kd_basis={basis}；"
+                    f"leaching={'on' if config.leaching.enabled else 'off'}；"
+                    f"runoff={'on' if config.runoff.enabled else 'off'}"
+                ),
+            )
+            kd = resolver.resolve(
+                ParameterRequest(
+                    key=kd_key(element),
+                    unit="L/kg",
+                    dimension="partition_coefficient",
+                    doc_section=LEACHING_DOC,
+                    context=(
+                        f"元素 {element} 的溶解态输移分配系数 Kd"
+                        f"（口径 {basis}，见 ADR-0011）"
+                    ),
+                    suggestions=(
+                        f"在参数库中新增键 {kd_key(element)!r}，"
+                        "unit 写 L/kg 并在 applicability 中写明口径",
+                        "若只有可交换态口径的 Kd，改用 kd_basis: labile "
+                        f"并提供 {f_exch_key(element)!r}",
+                    ),
+                )
+            )
+            if kd <= 0.0:
+                raise ValueError(
+                    f"元素 {element} 的 Kd={kd} L/kg 必须为正。"
+                    "Kd=0 无法计算孔隙水浓度（占位模式的 0 也不行）；"
+                    f"请在参数库中给出 {kd_key(element)!r} 的正值，"
+                    "或关闭 leaching / runoff 的 enabled。"
+                )
+            kd_by_element[element] = kd
+
+            if basis == LEACHING_LABILE:
+                fraction = resolver.resolve(
+                    ParameterRequest(
+                        key=f_exch_key(element),
+                        unit="-",
+                        dimension="dimensionless",
+                        doc_section=LEACHING_DOC,
+                        context=(
+                            f"元素 {element} 的可交换态占比 f_exch"
+                            "（BCR F1 口径，用于 labile Kd）"
+                        ),
+                        suggestions=(
+                            f"在参数库中新增键 {f_exch_key(element)!r}，"
+                            "写明浸提方法与来源",
+                            "若 Kd 本身是全量口径，改用 kd_basis: total",
+                        ),
+                    )
+                )
+                if not 0.0 < fraction <= 1.0:
+                    raise ValueError(
+                        f"元素 {element} 的 f_exch={fraction} 必须在 (0, 1] 内。"
+                        "它是可交换态占全量的比例，不是百分数；"
+                        "写成 8 会把淋溶放大 8 倍。"
+                    )
+                f_exch_by_element[element] = fraction
+            else:
+                f_exch_by_element[element] = 1.0
+
+        if leaching_elements:
+            overrides["leaching"] = LeachingModule(
+                kd_l_per_kg={e: kd_by_element[e] for e in leaching_elements},
+                f_exch={e: f_exch_by_element[e] for e in leaching_elements},
+                runoff_fraction=runoff_fraction or 0.0,
+            )
+        if runoff_elements:
+            overrides["runoff"] = RunoffModule(
+                kd_l_per_kg={e: kd_by_element[e] for e in runoff_elements},
+                f_exch={e: f_exch_by_element[e] for e in runoff_elements},
+                runoff_fraction=runoff_fraction or 0.0,
+            )
+    elif weather_spec is not None:
+        logger.warning(
+            "气象数据已装载，但没有任何元素启用淋溶或径流；"
+            "水量平衡未参与任何通量。若要计算，请在 elements/<E>.yaml 中"
+            "设置 leaching.enabled 或 runoff.enabled。"
+        )
+
+    if erosion_elements:
+        rate = resolver.resolve(
+            ParameterRequest(
+                key="erosion.rate",
+                unit="t/ha/a",
+                dimension="erosion_rate",
+                doc_section=EROSION_DOC,
+                context="土壤侵蚀速率（年值；模块内按 365 天均匀摊分）",
+                suggestions=(
+                    "在参数库中新增键 'erosion.rate'，单位 t/ha/a 或 kg/ha/a",
+                    "稻田请取南方红壤 1–6 t/ha/a，不要套用黄土高原 68–126",
+                ),
+            )
+        )
+        if rate < 0.0:
+            raise ValueError(f"侵蚀速率不得为负，收到 {rate} kg/m2/a")
+        ratios: dict[str, float] = {}
+        for element in erosion_elements:
+            ratio = resolver.resolve(
+                ParameterRequest(
+                    key=f"erosion.er.{element}",
+                    unit="-",
+                    dimension="dimensionless",
+                    doc_section=EROSION_DOC,
+                    context=f"元素 {element} 的侵蚀富集比 ER",
+                    suggestions=(
+                        f"在参数库中新增键 'erosion.er.{element}'，并写明来源性质",
+                        "Cd 没有中国实测 ER；建议取 1.0 并另做 1–4 的敏感性",
+                    ),
+                )
+            )
+            if ratio < 0.0:
+                raise ValueError(
+                    f"元素 {element} 的侵蚀富集比不得为负，收到 {ratio}"
+                )
+            ratios[element] = ratio
+        overrides["erosion"] = ErosionModule(
+            rate_kg_m2_a=rate,
+            enrichment_ratio=ratios,
+        )
+
+    if driver_sources:
+        drivers = (
+            driver_sources[0]
+            if len(driver_sources) == 1
+            else CombinedDrivers(tuple(driver_sources))
+        )
 
     events: EventSchedule | None = None
     schedules: list[EventSchedule] = []

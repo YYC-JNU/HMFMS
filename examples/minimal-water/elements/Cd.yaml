@@ -1,0 +1,9 @@
+element: Cd
+leaching:
+  enabled: true
+  kd_basis: total
+runoff:
+  enabled: true
+  kd_basis: total
+erosion:
+  enabled: true

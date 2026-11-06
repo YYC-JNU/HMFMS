@@ -6,16 +6,22 @@
 """
 
 from hmfms.schemes.deposition import DepositionModule
+from hmfms.schemes.erosion import ErosionModule
 from hmfms.schemes.fertilization import FertilizationModule
 from hmfms.schemes.harvest import HarvestModule
 from hmfms.schemes.irrigation import IrrigationModule
+from hmfms.schemes.leaching import LeachingModule
+from hmfms.schemes.runoff import RunoffModule
 from hmfms.schemes.straw import StrawRemovalModule, StrawReturnModule
 
 __all__ = [
     "DepositionModule",
+    "ErosionModule",
     "FertilizationModule",
     "HarvestModule",
     "IrrigationModule",
+    "LeachingModule",
+    "RunoffModule",
     "StrawRemovalModule",
     "StrawReturnModule",
 ]

@@ -1,0 +1,46 @@
+name: HMFMS minimal water example
+version: "0.4.0"
+
+time:
+  start: "2020-01-01"
+  end: "2020-01-10"
+  timestep: "1D"
+
+elements:
+  - Cd
+
+element_configs:
+  Cd: elements/Cd.yaml
+
+field: field.yaml
+
+inputs:
+  soil:
+    file: soil.csv
+    units:
+      depth: cm
+      bulk_density: kg/m3
+      concentration: mg/kg
+  weather:
+    file: weather.csv
+    date_column: date
+    precipitation_column: precipitation_mm
+    evapotranspiration_column: et_mm
+    units:
+      precipitation: mm/day
+      evapotranspiration: mm/day
+    gap_policy: error
+
+# 地表径流占降水盈余的比例（0–1，无默认值，ADR-0012）
+hydrology:
+  runoff_fraction: 0.5
+
+parameters:
+  library: defaults/params.yaml
+
+output:
+  directory: output
+  interval:
+    - daily
+
+closure_tolerance: 1.0e-8

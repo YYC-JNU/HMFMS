@@ -43,8 +43,9 @@ def _display_name(path: Path, base: Path) -> str:
 def model_material(model: ModelConfig) -> bytes:
     """模型配置的规范化表示。
 
-    只去掉沉降的**取数接线**（源文件、格式、列名、维度名）——这些不改变
-    模型看到的数值；`units` / `gap_policy` / `magnitude_check` 仍然计入指纹。
+    只去掉**取数接线**与**未生效的空配置**（源文件、格式、列名、维度名、
+    未设置的 ``hydrology.runoff_fraction``）——这些不改变模型看到的数值；
+    `units` / `gap_policy` / `magnitude_check` 仍然计入指纹。
     沉降数值本身由 :func:`deposition_material` 承担。
     """
     payload = model.model_dump(mode="json")
@@ -61,6 +62,25 @@ def model_material(model: ModelConfig) -> bytes:
                 "netcdf",
             ):
                 deposition.pop(key, None)
+        # 气象同样是"取数接线"：文件名与列名不改变模型看到的数值，
+        # 数值本身由输入文件内容参与哈希。units / gap_policy /
+        # magnitude_check 仍然计入，因为它们改变解释方式。
+        weather = inputs.get("weather")
+        if weather is None:
+            # 没配气象 = 没这条有效输入。留着 ``"weather": null`` 会让
+            # 纯沉降场景的指纹随 schema 演进而漂移。
+            inputs.pop("weather", None)
+        elif isinstance(weather, dict):
+            for key in (
+                "file",
+                "date_column",
+                "precipitation_column",
+                "evapotranspiration_column",
+            ):
+                weather.pop(key, None)
+    hydrology = payload.get("hydrology")
+    if isinstance(hydrology, dict) and hydrology.get("runoff_fraction") is None:
+        payload.pop("hydrology", None)
     return json.dumps(
         payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
     ).encode("utf-8")

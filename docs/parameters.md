@@ -39,6 +39,11 @@
 | `crop.<作物>.<器官>.Pb` | 作物器官 Pb 含量 | 同上 |
 | `bcf.<作物>.<器官>.<元素>` | 富集系数（器官 mg/kg ÷ 土壤 mg/kg） | 田间与盆栽值差 1–2 个数量级；仅当该元素切到 `bcf` 模式时需要 |
 | `irr.<水源>.Pb` | 灌溉水 Pb 浓度 | 缺乏可核验的区域调查值 |
+| `kd.<元素>` | 土壤-水分配系数（L·kg⁻¹） | 三种口径（labile / 全量 / 全固相）相差两个数量级，给默认值等于替用户选口径（ADR-0011）；淋溶与径流共用 |
+| `f_exch.<元素>` | 可交换态占全量比例（BCR F1） | 仅在 `kd_basis: labile` 时需要；与 DTPA 提取比例不是同一口径 |
+| `hydrology.runoff_fraction` | 地表径流占降水盈余的比例（0–1） | 中国农田径流系数随地形、土壤、降雨强度可差一个量级，没有可引用的默认值（ADR-0012） |
+| `erosion.rate` | 土壤侵蚀速率（t·ha⁻¹·a⁻¹） | 区域间差两个数量级：稻田取南方红壤 1–6，套用黄土高原 68–126 会放大约 20–100 倍 |
+| `erosion.er.<元素>` | 侵蚀富集比 ER | Cd 无中国实测值；3.98 是 Cr/Cu/Pb/Ni 通用值，不得声称是 Cd 实测（`PARAMS_SOURCE.md` §5.4） |
 | `k_loss` | 综合损失系数（d⁻¹） | 经验项，只能由本地观测率定 |
 
 ### 2.1 切换到 BCF 模式
@@ -92,6 +97,82 @@ inputs:
 相同的格式。之后可以直接把 `format` 改为 `csv`、`file` 指向 `extracted.csv` 复用。
 坐标超出网格范围、变量或维度缺失时，模型会直接报错并列出实际存在的名字与范围。
 
+### 2.3 淋溶、径流与侵蚀
+
+三个水文过程都需要**没有文献默认值**的参数，因此必须显式配置；
+缺任何一个都会在装载期报 `ParameterSourceError`，不会静默取 0。
+
+#### 2.3.1 气象与水量分配
+
+```yaml
+inputs:
+  weather:
+    file: weather.csv      # 必需列：date、precipitation_mm；可选列：et_mm
+    units:
+      precipitation: mm/day
+      evapotranspiration: mm/day
+    gap_policy: error      # error | interpolate
+    magnitude_check:
+      precipitation: {min: 0.0, max: 200.0}
+
+hydrology:
+  runoff_fraction: 0.2     # 0–1；启用 runoff 时必须给，且不能与 runoff 分离
+```
+
+- 当日：`excess = max(0, P + I − ET)`，`Q_runoff = runoff_fraction × excess`，
+  `q_leach = excess − Q_runoff`。
+- 未配置 `hydrology` 时按 0 处理（全部下渗），这是只做淋溶时的行为。
+- 启用 `runoff` 却没给比例、或给了比例却没有元素启用 `runoff`，都会报错。
+
+#### 2.3.2 元素开关
+
+```yaml
+# elements/Cd.yaml
+element: Cd
+leaching:
+  enabled: true
+  kd_basis: total          # total | labile
+runoff:
+  enabled: true
+  kd_basis: total          # 必须与 leaching 一致（Kd 是元素属性）
+erosion:
+  enabled: true
+```
+
+#### 2.3.3 参数库
+
+```yaml
+parameters:
+  - key: kd.Cd
+    value: 151
+    unit: L/kg
+    applicability: "全量口径；pH_CaCl2 5.5、OC 2.5% 的农田（Six & Smolders 2014 Model 5 换算）"
+    source: "Six & Smolders 2014, Sci. Total Environ. 485-486:319-328, Table 4 / Eq.(5)"
+
+  - key: erosion.rate
+    value: 1.07
+    unit: t/ha/a
+    applicability: "浙江红壤 8–15°，等高耕作，14 年定位小区"
+    source: "水建国等，中国农业科学 36 卷（PARAMS_SOURCE.md §5.4）"
+
+  - key: erosion.er.Cd
+    value: 1.0
+    unit: "-"
+    applicability: "保守取 1.0；Cd 无中国实测 ER，敏感性建议 1–4"
+    source: "PARAMS_SOURCE.md §5.4（3.98 为 Cr/Cu/Pb/Ni 通用值，非 Cd 实测）"
+```
+
+规则：
+
+- `kd_basis: total` 时 `f_exch = 1`；`labile` 时还须给 `f_exch.<元素>`，
+  写**比例**（0.08）而不是百分数（8）。
+- `runoff` 只记**溶解态**；随泥沙流失的颗粒态记在 `erosion` 列，
+  两列不能相加（ADR-0012）。
+- `erosion.rate` 按年值均匀摊到每日：年总量严格等于该速率，
+  但单次暴雨事件无法解释。稻田取南方红壤 1–6，禁止套用黄土高原 68–126。
+- 侵蚀不依赖气象；只有 `leaching` / `runoff` 需要 `inputs.weather`。
+- 蒸散列整列缺失时按 0 处理并警告；降水缺日按 `gap_policy` 报错或插值。
+
 ## 3. Cd 与 Pb 的量级参考
 
 用于判断自己的输入是否在合理范围内（换算为日均通量）：
@@ -124,6 +205,10 @@ inputs:
 2. **干重 / 鲜重**。作物器官与粪肥含量必须注明；两者可差 5–20 倍。
 3. **CEC 的单位**。`cmol·kg⁻¹` 与 `meq·kg⁻¹` 数值相同，但与 `mmol·kg⁻¹` 不同。
 4. **沉降是通量还是浓度**。`mg·m⁻²·d⁻¹` 是通量；`μg·L⁻¹` 是浓度，需要乘以降水量才能得到通量。
+5. **Kd 的口径**。`kd.<元素>` 必须与 `kd_basis` 一致：`total` 指全量含量 / 孔隙水浓度，
+   `labile` 指可交换态含量 / 孔隙水浓度。两者可差 10–100 倍，换用前先看 `applicability`。
+   `f_exch` 是 BCR F1 可交换态比例，与 DTPA 提取比例不可互换（见 `PARAMS_SOURCE.md` §5.5）。
+   淋溶与径流共用同一个 Kd，两个过程不能各写一个口径。
 
 ## 5. 占位模式（仅用于结构演示）
 

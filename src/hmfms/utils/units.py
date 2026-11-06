@@ -36,9 +36,11 @@ class UnitError(ValueError):
 
 M2_PER_HECTARE: Final[float] = 10_000.0
 MG_PER_G: Final[float] = 1_000.0
+KG_PER_TONNE: Final[float] = 1_000.0
 UG_PER_MG: Final[float] = 1_000.0
 MM_PER_METRE: Final[float] = 1_000.0
 CM_PER_METRE: Final[float] = 100.0
+LITRES_PER_M3: Final[float] = 1_000.0
 DAYS_PER_YEAR: Final[float] = 365.0
 
 # 1 mm 降水落在 1 m² 上恰好是 1 L 水，故 mm 与 L·m⁻² 数值相同。
@@ -77,6 +79,29 @@ ALLOWED_UNITS: Final[dict[str, dict[str, float]]] = {
         "mm": 1.0,
         "cm": MM_PER_METRE / CM_PER_METRE,
         "m": MM_PER_METRE,
+    },
+    # 水深速率 → mm·d⁻¹。模型步长恒为 1 天（TimeConfig 只接受 1D），
+    # 因此 mm/day 与 mm 数值相同；保留独立量纲是为了让"逐日速率"在配置里显式。
+    "water_flux": {
+        "mm/day": 1.0,
+        "mm/d": 1.0,
+        "cm/day": MM_PER_METRE / CM_PER_METRE,
+        "m/day": MM_PER_METRE,
+    },
+    # 分配系数 → L·kg⁻¹。全量口径与可交换态口径由配置声明，代码不做换算
+    # （ADR-0011）；mL/g 与 L/kg 数值相同。
+    "partition_coefficient": {
+        "L/kg": 1.0,
+        "mL/g": 1.0,
+    },
+    # 侵蚀速率 → kg·m⁻²·a⁻¹。年值在模块内按 365 天均匀摊分（ADR-0012）。
+    "erosion_rate": {
+        "kg/m2/a": 1.0,
+        "kg/m2/yr": 1.0,
+        "t/ha/a": KG_PER_TONNE / M2_PER_HECTARE,
+        "t/ha/yr": KG_PER_TONNE / M2_PER_HECTARE,
+        "kg/ha/a": 1.0 / M2_PER_HECTARE,
+        "kg/ha/yr": 1.0 / M2_PER_HECTARE,
     },
     # 施用量 / 产量 → kg·ha⁻¹
     "application_rate": {

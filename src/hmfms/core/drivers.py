@@ -8,11 +8,14 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date
 from typing import Any, Mapping, Protocol
 
 DRIVER_DEPOSITION_DRY = "deposition_dry"
 DRIVER_DEPOSITION_WET = "deposition_wet"
+DRIVER_PRECIPITATION = "precipitation_mm"
+DRIVER_ET = "evapotranspiration_mm"
 
 
 class DailyDriver(Protocol):
@@ -27,3 +30,26 @@ class NullDrivers:
 
 
 NULL_DRIVERS = NullDrivers()
+
+
+@dataclass(frozen=True)
+class CombinedDrivers:
+    """把多个逐日驱动源合成一个。
+
+    同一个键被两个源提供视为配置错误：沉降与气象是两条独立数据流
+    （``INV-1``），键名重叠意味着有人把两件事接在了一起。
+    """
+
+    sources: tuple[DailyDriver, ...] = ()
+
+    def at(self, day: date) -> Mapping[str, Any]:
+        merged: dict[str, Any] = {}
+        for source in self.sources:
+            for key, value in source.at(day).items():
+                if key in merged:
+                    raise ValueError(
+                        f"驱动键 {key!r} 被多个数据源重复提供；"
+                        "沉降与气象必须各自使用独立的键。"
+                    )
+                merged[key] = value
+        return merged

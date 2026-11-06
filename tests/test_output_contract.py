@@ -51,6 +51,11 @@ BASELINE_CD_L1 = (
     "cumulative_input_Cd_mg_m2",
     "cumulative_output_Cd_mg_m2",
     "closure_error_Cd_mg_m2",
+    "water_precipitation_mm_d",
+    "water_evapotranspiration_mm_d",
+    "water_irrigation_mm_d",
+    "water_runoff_mm_d",
+    "water_percolation_mm_d",
 )
 
 # 期初值取 0.35、容重 1300、层厚 20 cm；沉降按天递增，便于检查聚合。
@@ -270,8 +275,8 @@ def _group(rows: list[dict[str, str]], label: str) -> dict[str, list[dict[str, s
 
 
 def _expected_value(column: str, values: list[float]) -> float:
-    """通量列取日均；状态、累积与闭合列取期末值（T10 契约）。"""
-    if column.endswith("_mg_m2_d"):
+    """通量列（含 mm/d 水量列）取日均；状态、累积与闭合列取期末值（T10 契约）。"""
+    if column.endswith("_mg_m2_d") or column.endswith("_mm_d"):
         return math.fsum(values) / len(values)
     return values[-1]
 

@@ -30,9 +30,19 @@ from hmfms.core.integrator import DayRecord
 from hmfms.core.registry import PROCESS_NAMES
 from hmfms.parameters.resolver import Provenance
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 META_PREFIX = "#"
 PLACEHOLDER_SUFFIX = "_PLACEHOLDER"
+
+# 逐日水量诊断列的**唯一来源**（ADR-0012）。键是 DayRecord.water 的键，
+# 值是输出列名；月表/年表按通量口径取期内日均。
+WATER_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("precipitation", "water_precipitation_mm_d"),
+    ("evapotranspiration", "water_evapotranspiration_mm_d"),
+    ("irrigation", "water_irrigation_mm_d"),
+    ("runoff", "water_runoff_mm_d"),
+    ("percolation", "water_percolation_mm_d"),
+)
 
 Frequency = OutputFrequency
 
@@ -82,6 +92,7 @@ def output_columns(
                 f"closure_error_{element}_mg_m2",
             ]
         )
+    columns.extend(column for _, column in WATER_COLUMNS)
     if placeholder:
         return ("date", *(f"{column}{PLACEHOLDER_SUFFIX}" for column in columns[1:]))
     return tuple(columns)
@@ -103,6 +114,7 @@ class TableRecord:
     cumulative_in: dict[str, float]
     cumulative_out: dict[str, float]
     closure: dict[str, float]
+    water: dict[str, float]
 
 
 def period_label(day: date, frequency: Frequency) -> str:
@@ -160,6 +172,10 @@ def _table_record(
         cumulative_in={e: last.cumulative_in[e] for e in elements},
         cumulative_out={e: last.cumulative_out[e] for e in elements},
         closure={e: last.closure[e] for e in elements},
+        water={
+            key: _mean([record.water[key] for record in group])
+            for key, _ in WATER_COLUMNS
+        },
     )
 
 
@@ -223,6 +239,7 @@ def _row(
                 f"{record.closure[element]:.12g}",
             ]
         )
+    values.extend(f"{record.water[key]:.12g}" for key, _ in WATER_COLUMNS)
     return values
 
 

@@ -175,6 +175,43 @@ class DepositionConfig(_Strict):
         return self
 
 
+class WeatherUnits(_Strict):
+    """逐日气象的单位。"""
+
+    precipitation: str = "mm/day"
+    evapotranspiration: str = "mm/day"
+
+    @field_validator("precipitation", "evapotranspiration")
+    @classmethod
+    def _check_water_flux(cls, value: str) -> str:
+        to_internal(1.0, value, "water_flux")
+        return value
+
+
+class WeatherMagnitudeCheck(_Strict):
+    """气象量级检查，单位 mm·d⁻¹。阈值必须由配置给出（同沉降）。"""
+
+    precipitation: MagnitudeLimit | None = None
+    evapotranspiration: MagnitudeLimit | None = None
+
+
+class WeatherConfig(_Strict):
+    """逐日气象输入接线（降水必需、蒸散可选）。
+
+    ``et`` 列整体缺失时按 0 处理并**一次性警告**：水量平衡仍能算，
+    但下渗量等于 `P + I`，是上限而不是估计值。列存在但个别单元格为空，
+    则按 ``gap_policy`` 处理，绝不静默补零。
+    """
+
+    file: Path
+    date_column: str = "date"
+    precipitation_column: str = "precipitation_mm"
+    evapotranspiration_column: str = "et_mm"
+    units: WeatherUnits = WeatherUnits()
+    gap_policy: Literal["error", "interpolate"] = "error"
+    magnitude_check: WeatherMagnitudeCheck | None = None
+
+
 class ParametersConfig(_Strict):
     """默认参数库位置。
 
@@ -188,6 +225,7 @@ class ParametersConfig(_Strict):
 class InputsConfig(_Strict):
     soil: SoilInputConfig
     deposition: DepositionConfig | None = None
+    weather: WeatherConfig | None = None
 
 
 class OutputConfig(_Strict):
@@ -348,6 +386,28 @@ class ManagementConfig(_Strict):
     straw_events: StrawEventConfig | None = None
 
 
+class HydrologyConfig(_Strict):
+    """田块级水量分配（ADR-0012）。
+
+    ``runoff_fraction`` 是地表径流占降水盈余的比例，**没有默认值**：
+    不写表示"没有地表径流"（T14/T15 的既有行为）；启用 `runoff` 时必须给出。
+    把它写成物理默认值等于替用户选择一个径流系数，而中国农田径流系数
+    随地形、土壤与降雨强度可差一个量级。
+    """
+
+    runoff_fraction: float | None = None
+
+    @field_validator("runoff_fraction")
+    @classmethod
+    def _range(cls, value: float | None) -> float | None:
+        if value is not None and not 0.0 <= value <= 1.0:
+            raise ValueError(
+                f"hydrology.runoff_fraction 必须在 [0, 1] 内，收到 {value}；"
+                "它是径流量占降水盈余的比例。"
+            )
+        return value
+
+
 class ModelConfig(_Strict):
     name: str = Field(min_length=1)
     version: str = Field(min_length=1)
@@ -359,6 +419,7 @@ class ModelConfig(_Strict):
     output: OutputConfig
     parameters: ParametersConfig | None = None
     management: ManagementConfig | None = None
+    hydrology: HydrologyConfig = HydrologyConfig()
     closure_tolerance: float = Field(default=1e-8, gt=0.0)
 
     @field_validator("elements")

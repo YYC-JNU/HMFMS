@@ -1,0 +1,21 @@
+parameters:
+  - key: kd.Cd
+    value: 300
+    unit: L/kg
+    confidence: low
+    applicability: "示例假设：只为让算例可运行，不代表任何具体土壤"
+    source: "examples/minimal-water/README.md（示例假设，不是文献默认值）"
+
+  - key: erosion.rate
+    value: 1.07
+    unit: t/ha/a
+    confidence: low
+    applicability: "浙江红壤 8–15°，等高耕作（示例借用，非本算例实测）"
+    source: "PARAMS_SOURCE.md §5.4（水建国等，中国农业科学 36 卷）"
+
+  - key: erosion.er.Cd
+    value: 1.0
+    unit: "-"
+    confidence: low
+    applicability: "保守假设；Cd 无中国实测 ER"
+    source: "PARAMS_SOURCE.md §5.4（3.98 为 Cr/Cu/Pb/Ni 通用值，不含 Cd）"

@@ -1,21 +1,20 @@
 # HMFMS — Heavy Metal Flux Model in Soil
 
-> ## ⚠️ 状态：0.2.1-alpha — 用户指南已发布，v1 范围已实现，仍是研究原型
+> ## ⚠️ 状态：0.4.0-alpha — 水文过程已部分落地，仍是研究原型
 >
-> **0.2.1-alpha 是文档补丁**：新增完整用户指南；模型行为、配置与输出契约
-> （`schema_version=4`）不变。
->
-> v1 的 13 项开发任务已全部完成，251 个测试通过。发布出来是为了尽早获得反馈，
-> 而不是提供一个可以直接用于科研结论的成品。请在使用前读完这段。
+> **0.4.0-alpha 新增**：溶解态径流、颗粒态侵蚀、逐日水量诊断列；输出契约升到
+> `schema_version=5`。淋溶与简化水量平衡自 0.3 起可用（0.3 未单独发布）。
+> 322 个测试通过。发布出来是为了尽早获得反馈，而不是提供一个可以直接用于
+> 科研结论的成品。请在使用前读完这段。
 >
 > **已经能做的**：从配置与输入数据出发，逐日推演单块田 0–20 cm 耕层土壤 Cd / Pb 的总量；
 > 输出日/月/年三张频率表、分过程通量、累积收支、质量闭合误差与参数溯源；
-> 作物吸收可用固定浓度或 BCF；沉降可读 CSV 或 NetCDF；另带一个独立的观测对比命令
-> 与一个十年稻田演示场景。
+> 作物吸收可用固定浓度或 BCF；沉降可读 CSV 或 NetCDF；另带一个独立的观测对比命令、
+> 一个十年稻田演示场景与一个水文过程最小算例。
 >
-> **还不能做的**：淋溶、径流、侵蚀、风蚀、挥发、水分平衡尚未实现（当前返回零通量）。
-> 因此模型给出的是土壤重金属累积的**上限**，不是预测值——尤其对 Pb，
-> 其主要输出途径恰好是径流，关闭后会被**显著高估**。运行日志会按元素分别警告。
+> **还不能做的**：风蚀与挥发仍返回零通量；径流只记**溶解态**，颗粒态记在 `erosion` 列，
+> 两者不能相加；侵蚀速率按年值均匀摊分，不能解释单次暴雨。
+> 径流比例、侵蚀速率与富集比**没有默认值**，必须由用户提供并说明来源。
 >
 > **还会变的**：配置字段、输出列名、内部 API 都可能在不通知的情况下调整。
 > 如果你要用它，建议固定到某个 tag。
@@ -66,6 +65,12 @@ python -m hmfms demo --no-validate   # 只跑模型
 python -m hmfms run examples/minimal/model.yaml
 ```
 
+水文过程最小算例（淋溶、溶解态径流、颗粒态侵蚀 + 水量诊断列）：
+
+```bash
+python -m hmfms run examples/minimal-water/model.yaml
+```
+
 观测对比（只读已有模拟输出，不重跑模型）：
 
 ```bash
@@ -73,6 +78,8 @@ python -m hmfms validate examples/paddy-10y/validation.yaml
 ```
 
 `examples/minimal` 是一个 10 天的合成算例，**数值为演示量级，不代表任何真实田块**。
+`examples/minimal-water` 专门演示三个水文输出过程与五列水量，README 给出逐日手算过程；
+其中的 `kd`、`runoff_fraction` 与 ER 都标注为示例假设，不是文献默认值。
 `examples/paddy-10y` 是按文献区间合成的十年稻田场景，参数来源与假设见该目录 README。
 
 ## 模型描述
@@ -145,6 +152,33 @@ F_lumped       = k_loss · M                                      (12)
 - **器官不重复处理**：同一 `(作物, 器官)` 不得同时出现在收获表与秸秆表，
   否则同一份质量会被扣两次。装载期直接报错。
 
+### 水文过程（0.3–0.4）
+
+逐日水量按配置比例分配（`hydrology.runoff_fraction`，0–1，无默认值）：
+
+```
+excess   = max(0, P + I − ET)                                    (13)
+Q_runoff = f_runoff · excess                                     (14)
+q_leach  = excess − Q_runoff                                     (15)
+```
+
+金属通量：
+
+```
+F_leach  = q_leach  · f_exch · C_total / Kd                      (16)
+F_runoff = Q_runoff · f_exch · C_total / Kd                      (17)   只记溶解态
+F_erosion = (rate / 365) · ER · C_total                          (18)   只记颗粒态
+```
+
+- `Kd` 与 `f_exch` 是**元素级**参数（`kd.<元素>` / `f_exch.<元素>`），口径由
+  `kd_basis: total|labile` 显式声明；`total` 时 `f_exch = 1`。
+- 淋溶与径流共用同一 Kd，两者 `kd_basis` 不一致会在装载期报错。
+- **`runoff` 与 `erosion` 不能相加**：前者是溶解态，后者是颗粒态；
+  式 21 的“径流颗粒态”与式 22 是同一份质量的两种记账方式，本项目只记后者。
+- 侵蚀速率按年值均匀摊到每日：年总量可核验，但单次暴雨事件无法解释。
+- `runoff_fraction`、`erosion.rate`、`erosion.er.<元素>` **都没有默认值**，
+  缺失即报错；它们必须来自本地观测或明确标注的假设。
+
 ### 已实现的过程
 
 | 过程 | 方向 | 触发 |
@@ -156,24 +190,27 @@ F_lumped       = k_loss · M                                      (12)
 | 作物收获 | 输出 | 事件日（收获日） |
 | 秸秆外运 | 输出 | 事件日 |
 | 综合损失（经验，默认关闭） | 输出 | 每日 |
+| 淋溶（需气象） | 输出 | 每日 |
+| 径流，溶解态（需气象 + 径流比例） | 输出 | 每日 |
+| 侵蚀，颗粒态（需年速率 + ER） | 输出 | 每日 |
 
 作物吸收在同一张表里支持两种模式：固定器官浓度（`concentration`）或富集系数
 （`bcf`）。模式按元素配置，同一元素只能取一种；详见下文“更多能力”。
 
-### 预留但尚未实现的过程
+### 预留但仍未实现的过程
 
-淋溶、径流、侵蚀、风蚀、挥发、水分平衡在首版**返回零通量**，但输出列始终存在。
-启用时不需要改动任何下游读取代码。
+风蚀与挥发仍**返回零通量**，但输出列始终存在。启用时不需要改动任何下游读取代码。
 
-**这意味着什么，请务必注意**：关闭淋溶、径流、侵蚀后，模型给出的是土壤重金属累积的
+**这意味着什么，请务必注意**：没有启用径流与侵蚀时，模型给出的是土壤重金属累积的
 **上限**，不是预测值。而且对两个元素的影响程度不同——
 
-- Cd 主要通过作物收获离开农田，关闭径流的影响相对有限；
-- **Pb 主要通过地表径流离开农田**（实测占其总输出的一半以上），关闭后**显著高估**。
+- Cd 主要通过作物收获离开农田，未启用径流的影响相对有限；
+- **Pb 主要通过地表径流离开农田**（实测占其总输出的一半以上），
+  不配置 `runoff` 会**显著高估**。
 
-模型在运行日志中会按元素分别给出警告。
+模型在运行日志中会按元素分别给出警告，并说明径流/侵蚀的记账边界。
 
-## 更多能力（0.2）
+## 更多能力（0.2–0.4）
 
 ### 作物吸收：固定浓度或 BCF
 
@@ -197,18 +234,42 @@ BCF 值取自参数库 `bcf.<作物>.<器官>.<元素>`，或事件行 `<元素>
 同一元素写两种模式、或使用 `basis: available`，装载期直接报错。
 v1 的 BCF 只作用于收获表；秸秆表仍按固定浓度计算，并在运行日志中提示。
 
+### 水文过程配置（0.4）
+
+```yaml
+# model.yaml
+inputs:
+  weather:
+    file: weather.csv          # 必需：date、precipitation_mm；可选：et_mm
+    units: {precipitation: mm/day, evapotranspiration: mm/day}
+hydrology:
+  runoff_fraction: 0.2         # 0–1；启用 runoff 时必须给，且不能与 runoff 分离
+```
+
+```yaml
+# elements/Cd.yaml
+element: Cd
+leaching: {enabled: true, kd_basis: total}
+runoff:   {enabled: true, kd_basis: total}   # 与 leaching 口径必须一致
+erosion:  {enabled: true}
+```
+
+参数库需要 `kd.<元素>`；`kd_basis: labile` 时还需要 `f_exch.<元素>`；
+侵蚀需要 `erosion.rate` 与 `erosion.er.<元素>`。缺任何一个都会报错，不会静默取 0。
+完整可运行示例与手算过程见 `examples/minimal-water/`。
+
 ### 输出频率、配置指纹与占位模式
 
 `output.interval` 可选 `daily` / `monthly` / `annual` 的任意组合，产物为
 `daily.csv` / `monthly.csv` / `annual.csv`。三张表共用同一份列契约：
 
-- 通量列（`_mg_m2_d`）取**期内日均**；
+- 通量列（`_mg_m2_d`）与水量列（`_mm_d`）取**期内日均**；
 - 状态、累积与闭合列取**期末值**。
 
 每张表首行为：
 
 ```
-# schema_version=4 fingerprint=<16hex> frequency=daily
+# schema_version=5 fingerprint=<16hex> frequency=daily
 ```
 
 指纹按**有效输入**计算：模型配置（去掉沉降取数接线）+ 加载后的沉降序列 + 其余输入文件。
@@ -251,11 +312,12 @@ MAE、RMSE、平均相对误差、期末误差、年际趋势误差，以及 `re
 ## 配置结构
 
 ```
-model.yaml                     主配置：时间范围、元素列表、各输入接线、输出选项
+model.yaml                     主配置：时间范围、元素列表、各输入接线、输出选项、hydrology
 field.yaml                     田块：编号、面积、经纬度
 soil.csv                       土壤剖面：逐层的深度、容重、pH、有机质、黏粒、CEC、初始含量
 deposition.csv                 逐日干/湿沉降通量（或 NetCDF + netcdf 块）
-elements/<元素>.yaml           可选：吸收模式与按元素诊断（如关闭径流的警告强度）
+weather.csv                    逐日降水与蒸散（启用淋溶/径流时必需）
+elements/<元素>.yaml           可选：吸收模式、淋溶/径流/侵蚀开关与 Kd 口径、按元素诊断
 defaults/*.yaml                默认参数库（每条必须带来源）
 management/fertilizer_events.csv
 management/irrigation_events.csv
@@ -297,11 +359,25 @@ deposition_dry_<元素>_mg_m2_d
 deposition_wet_<元素>_mg_m2_d
 <12 个过程>_<元素>_mg_m2_d
 in_total / out_total / net_flux / cumulative_input / cumulative_output / closure_error
+water_precipitation_mm_d
+water_evapotranspiration_mm_d
+water_irrigation_mm_d
+water_runoff_mm_d
+water_percolation_mm_d
 ```
 
 未启用过程的列恒为 0，但不会消失——这样升级版本时下游脚本不必改。
 `date` 列的取值随频率变化（`YYYY-MM-DD` / `YYYY-MM` / `YYYY`），列名不变。
 另有 `resolved_parameters.csv`（参数溯源）与 validate 的三件产物。
+
+### 从 0.2 / 0.3 升级
+
+- `schema_version` 由 4 升到 **5**：表末新增五列 `water_*_mm_d`。按列名读取的脚本无需修改；
+  按列位置读取的必须适配。
+- 新增 `inputs.weather`、`hydrology.runoff_fraction` 与元素级 `runoff` / `erosion` 块，均可选；
+  不配置时数值与 0.2 相同（十年演示未变）。
+- 参数库新增 `kd.<元素>`、`f_exch.<元素>`、`erosion.rate`、`erosion.er.<元素>`，均**无默认值**；
+  缺失时装载期报错，不会静默取 0。
 
 ## 参数来源
 
@@ -314,8 +390,9 @@ in_total / out_total / net_flux / cumulative_input / cumulative_output / closure
 pytest
 ```
 
-251 个测试，覆盖单位换算、质量守恒（零输入 / 单一过程 / 综合输入输出）、
-事件处理、参数解析链、错误信息、输出契约、BCF 模式、NetCDF 适配、观测对比与十年演示。
+322 个测试，覆盖单位换算、质量守恒（零输入 / 单一过程 / 综合输入输出）、
+事件处理、参数解析链、错误信息、输出契约、BCF 模式、NetCDF 适配、观测对比、十年演示，
+以及淋溶/径流/侵蚀的公式、参数缺失、口径一致性与水量对账。
 
 ## 反馈
 
@@ -325,12 +402,17 @@ pytest
 ## 已知限制
 
 1. 单田块、单层，未实现多层垂向迁移。
-2. 未实现淋溶、径流、侵蚀、风蚀、挥发与水分平衡（结果为累积上限）。
-3. 未区分重金属化学形态与有效态动态；`basis: available` 会被拒绝。
-4. 作物吸收发生在收获日，不模拟生育期内动态；BCF 模式只作用于收获表。
-5. NetCDF 适配器要求一维坐标、三个配置维度、日尺度时间轴；掩码值直接报错。
-6. 观测对比只做误差记账，不替使用者判断结果是否可接受。
-7. 不使用 Fortran，首版为纯 Python 原型，性能不是当前优化目标。
+2. 风蚀与挥发未实现（返回 0）。
+3. 径流只记**溶解态**；颗粒态记在 `erosion` 列，两列不可相加。
+4. 侵蚀速率按年值均匀摊到每日，不能解释单次暴雨事件。
+5. 水量分配是集总比例，不含土壤储水、优先流与降雨强度。
+6. `runoff_fraction`、`erosion.rate`、`erosion.er.<元素>` 都没有默认值，
+   必须由用户提供并说明来源。
+7. 未区分重金属化学形态与有效态动态；`basis: available` 会被拒绝。
+8. 作物吸收发生在收获日，不模拟生育期内动态；BCF 模式只作用于收获表。
+9. NetCDF 适配器要求一维坐标、三个配置维度、日尺度时间轴；掩码值直接报错。
+10. 观测对比只做误差记账，不替使用者判断结果是否可接受。
+11. 不使用 Fortran，首版为纯 Python 原型，性能不是当前优化目标。
 
 ## 许可
 

@@ -20,9 +20,15 @@ from typing import Any, Mapping
 
 from hmfms.config.field import SoilProfile
 from hmfms.config.models import ModelConfig
-from hmfms.core.drivers import NULL_DRIVERS, DailyDriver
+from hmfms.core.drivers import (
+    DRIVER_ET,
+    DRIVER_PRECIPITATION,
+    NULL_DRIVERS,
+    DailyDriver,
+)
 from hmfms.core.errors import FluxImbalanceError
-from hmfms.core.events import NULL_EVENTS, EventSchedule
+from hmfms.core.events import EVENTS_IRRIGATION, NULL_EVENTS, EventSchedule
+from hmfms.core.water import split_excess
 from hmfms.core.registry import (
     FLUX_PROCESSES,
     FluxModule,
@@ -50,6 +56,7 @@ class DayRecord:
     cumulative_out: dict[str, float]
     closure: dict[str, float]
     relative_closure: dict[str, float]
+    water: dict[str, float]
 
 
 def _summarize_events(events: Mapping[str, Any]) -> tuple[str, ...]:
@@ -94,6 +101,31 @@ def integrate(
             ),
         )
         event_summary = _summarize_events(day_events)
+
+        # 水量诊断（ADR-0012）：与通量模块使用同一套分配公式，保证
+        # `water_runoff + water_percolation == 降水盈余` 可直接对账。
+        precipitation = day_drivers.get(DRIVER_PRECIPITATION)
+        evapotranspiration = day_drivers.get(DRIVER_ET, 0.0)
+        irrigation = math.fsum(
+            event.amount_mm for event in day_events.get(EVENTS_IRRIGATION, ())
+        )
+        if precipitation is None:
+            runoff = 0.0
+            percolation = 0.0
+        else:
+            runoff, percolation = split_excess(
+                precipitation_mm=precipitation,
+                irrigation_mm=irrigation,
+                evapotranspiration_mm=evapotranspiration,
+                runoff_fraction=model.hydrology.runoff_fraction or 0.0,
+            )
+        water = {
+            "precipitation": 0.0 if precipitation is None else precipitation,
+            "evapotranspiration": evapotranspiration,
+            "irrigation": irrigation,
+            "runoff": runoff,
+            "percolation": percolation,
+        }
 
         in_total: dict[str, float] = {}
         out_total: dict[str, float] = {}
@@ -170,6 +202,7 @@ def integrate(
                 cumulative_out=dict(cumulative_out),
                 closure=closure,
                 relative_closure=relative,
+                water=water,
             )
         )
 
